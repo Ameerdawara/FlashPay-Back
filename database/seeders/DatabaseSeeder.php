@@ -16,10 +16,18 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        $this->call([
+            CountrySeeder::class,
+            CitySeeder::class,
+            CurrencySeeder::class
+        ]);
+        \App\Models\User::create([
+            'name' => 'Ameer Admin',
+            'email' => 'admin@flashpay.com',
+            'phone' => '0931234567', // تأكد من إضافة رقم هاتف
+            'password' => bcrypt('password'),
+            'role' => 'admin',
+            'country_id' => 1, // ربطه بأول دولة من الـ Seeder
         ]);
     }
 }

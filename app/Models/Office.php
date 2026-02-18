@@ -6,6 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Office extends Model
 {
+    protected $fillable = [
+        'city_id',
+        'name',
+        'address',
+        'status',
+    ];
     public function city()
     {
         return $this->belongsTo(City::class);

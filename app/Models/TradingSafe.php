@@ -7,7 +7,11 @@ use Illuminate\Database\Eloquent\Model;
 class TradingSafe extends Model
 {
     public function office()
-{
-    return $this->belongsTo(Office::class, 'office_id');
-}
+    {
+        return $this->belongsTo(Office::class, 'office_id');
+    }
+    public function currency()
+    {
+        return $this->belongsTo(Currency::class);
+    }
 }
