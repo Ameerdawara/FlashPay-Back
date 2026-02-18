@@ -11,17 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-       Schema::create('users', function (Blueprint $table) {
-    $table->id();
-    $table->foreignId('office_id')->nullable()->constrained(); // للموظفين في سوريا
-    $table->foreignId('country_id')->nullable()->constrained(); // للمناديب في الخارج
-    $table->string('name');
-    $table->string('email')->unique();
-    $table->string('phone')->unique();
-    $table->string('password');
-    $table->enum('role', ['admin', 'accountant', 'cashier', 'agent', 'customer'])->default('customer');
-    $table->timestamps();
-});
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('office_id')->nullable()->constrained(); // للموظفين في سوريا
+            $table->foreignId('country_id')->nullable()->constrained(); // للمناديب في الخارج
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->string('phone')->unique();
+            $table->string('password');
+            $table->enum('role', ['admin', 'accountant', 'cashier', 'agent', 'customer'])->default('customer');
+            $table->timestamps();
+        });
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();
             $table->string('token');

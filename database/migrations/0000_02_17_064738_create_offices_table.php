@@ -11,14 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-       Schema::create('offices', function (Blueprint $table) {
-    $table->id();
-    $table->foreignId('city_id')->constrained();
-    $table->string('name');
-    $table->text('address')->nullable();
-    $table->boolean('status')->default(true);
-    $table->timestamps();
-});
+        Schema::create('offices', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('city_id')->constrained();
+            $table->string('name');
+            $table->text('address')->nullable();
+            $table->boolean('status')->default(true);
+            $table->timestamps();
+        });
     }
 
     /**

@@ -11,29 +11,29 @@ return new class extends Migration
      */
     public function up(): void
     {
-       // Database/migrations/create_transfers_table.php
-Schema::create('transfers', function (Blueprint $table) {
-    $table->id();
-    $table->string('tracking_code')->unique();
-    $table->foreignId('sender_id')->constrained('users');
-    
-    // المبالغ
-    $table->decimal('amount', 15, 2);
-    $table->foreignId('currency_id')->constrained();
-    $table->decimal('fee', 10, 2)->default(0);
-    
-    // جهة تسليم الكاش للمستلم (Destination)
-    $table->foreignId('destination_office_id')->nullable()->constrained('offices');
-    $table->foreignId('destination_agent_id')->nullable()->constrained('users');
+        // Database/migrations/create_transfers_table.php
+        Schema::create('transfers', function (Blueprint $table) {
+            $table->id();
+            $table->string('tracking_code')->unique();
+            $table->foreignId('sender_id')->constrained('users');
 
-    // بيانات المستلم
-    $table->string('receiver_name');
-    $table->string('receiver_phone');
-    $table->string('receiver_id_image')->nullable(); // مسار صورة الهوية
+            // المبالغ
+            $table->decimal('amount', 15, 2);
+            $table->foreignId('currency_id')->constrained();
+            $table->decimal('fee', 10, 2)->default(0);
 
-    $table->enum('status', ['pending', 'approved', 'ready', 'completed', 'cancelled'])->default('pending');
-    $table->timestamps();
-});
+            // جهة تسليم الكاش للمستلم (Destination)
+            $table->foreignId('destination_office_id')->nullable()->constrained('offices');
+            $table->foreignId('destination_agent_id')->nullable()->constrained('users');
+
+            // بيانات المستلم
+            $table->string('receiver_name');
+            $table->string('receiver_phone');
+            $table->string('receiver_id_image')->nullable(); // مسار صورة الهوية
+
+            $table->enum('status', ['pending', 'approved', 'ready', 'completed', 'cancelled'])->default('pending');
+            $table->timestamps();
+        });
     }
 
     /**
