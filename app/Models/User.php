@@ -9,6 +9,28 @@ use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
+
+    public function office()
+    {
+        return $this->belongsTo(Office::class);
+    }
+
+    public function country()
+    { // للمناديب فقط
+        return $this->belongsTo(Country::class);
+    }
+
+    // إذا كان المندوب له صندوق (Polymorphic)
+    public function mainSafe()
+{
+    return $this->morphOne(MainSafe::class, 'owner');
+}
+
+    // الحوالات التي أرسلها الزبون
+    public function sentTransfers()
+    {
+        return $this->hasMany(Transfer::class, 'sender_id');
+    }
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 

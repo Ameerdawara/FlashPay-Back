@@ -11,12 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-       Schema::create('main_safes', function (Blueprint $table) {
-    $table->id();
-    $table->morphs('owner'); // سيقوم بإنشاء owner_id و owner_type
-    $table->decimal('balance', 15, 2)->default(0);
-    $table->timestamps();
-});
+        Schema::create('main_safes', function (Blueprint $table) {
+            $table->id();
+            $table->morphs('owner'); // سيقوم بإنشاء owner_id و owner_type
+            $table->decimal('balance', 15, 2)->default(0);
+            $table->timestamps();
+        });
     }
 
     /**
