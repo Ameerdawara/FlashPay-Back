@@ -19,6 +19,10 @@ class User extends Authenticatable
     { // للمناديب فقط
         return $this->belongsTo(Country::class);
     }
+     public function city()
+    { // للمناديب فقط
+        return $this->belongsTo(City::class);
+    }
 
     // إذا كان المندوب له صندوق (Polymorphic)
     public function mainSafe()

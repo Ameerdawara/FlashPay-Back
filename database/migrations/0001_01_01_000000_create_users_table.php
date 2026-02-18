@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('office_id')->nullable()->constrained(); // للموظفين في سوريا
             $table->foreignId('country_id')->nullable()->constrained(); // للمناديب في الخارج
+            $table->foreignId('city_id')->nullable()->constrained();
             $table->string('name');
             $table->string('email')->unique();
             $table->string('phone')->unique();

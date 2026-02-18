@@ -15,6 +15,7 @@ class Transfer extends Model
     {
         return $this->belongsTo(Currency::class);
     }
+    
     public function destinationOffice()
     {
         return $this->belongsTo(Office::class, 'destination_office_id');
