@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Office;
 use Illuminate\Http\Request;
 
+use Illuminate\Support\Facades\DB;
+
 class OfficeController extends Controller
 {
     // 1. عرض كل المكاتب (Index)
@@ -18,46 +20,50 @@ class OfficeController extends Controller
     }
 
     // 2. إنشاء مكتب جديد (Store)
+
     public function store(Request $request)
     {
         $validated = $request->validate([
             'city_id' => 'required|exists:cities,id',
             'name'    => 'required|string|max:255|unique:offices,name',
             'address' => 'nullable|string',
-            'status'  => 'boolean'
+            'status'  => 'boolean',
+            // أضفنا التحقق من الرصيد الافتتاحي هنا
+            'balance' => 'required|numeric|min:0'
         ]);
 
-        $office = Office::create($validated);
-        return response()->json(['status' => 'success', 'data' => $office], 201);
-    }
+        try {
+            // نبدأ عملية الـ Transaction
+            $office = DB::transaction(function () use ($validated) {
 
-    // 3. عرض مكتب واحد بالتفصيل (Show)
-    public function show($id)
-    {
-        $office = Office::with('city')->find($id);
-        if (!$office) {
-            return response()->json(['message' => 'Office not found'], 404);
+                // 1. إنشاء المكتب
+                $office = Office::create([
+                    'city_id' => $validated['city_id'],
+                    'name'    => $validated['name'],
+                    'address' => $validated['address'] ?? null,
+                    'status'  => $validated['status'] ?? true,
+                ]);
+
+                // 2. إنشاء الصندوق المرتبط بالمكتب
+                // لارافيل سيعوض owner_id و owner_type تلقائياً
+                $office->mainSafe()->create([
+                    'balance' => $validated['balance']
+                ]);
+
+                return $office;
+            });
+
+            // جلب المكتب مع صندوقه الجديد لإعادته في الرد
+            return response()->json([
+                'status' => 'success',
+                'data' => $office->load('mainSafe')
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to create office and safe: ' . $e->getMessage()
+            ], 500);
         }
-        return response()->json(['status' => 'success', 'data' => $office], 200);
-    }
-
-    // 4. تحديث بيانات مكتب (Update)
-    public function update(Request $request, $id)
-    {
-        $office = Office::find($id);
-        if (!$office) {
-            return response()->json(['message' => 'Office not found'], 404);
-        }
-
-        $validated = $request->validate([
-            'city_id' => 'sometimes|exists:cities,id',
-            'name'    => 'sometimes|string|max:255|unique:offices,name,' . $id,
-            'address' => 'nullable|string',
-            'status'  => 'boolean'
-        ]);
-
-        $office->update($validated);
-        return response()->json(['status' => 'success', 'data' => $office], 200);
     }
 
     // 5. حذف مكتب (Destroy)

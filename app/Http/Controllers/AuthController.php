@@ -7,12 +7,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class AuthController extends Controller
 {
-    /**
-     * تسجيل مستخدم جديد مع شروط خاصة 
-     */
     public function register(Request $request)
     {
         $validated = $request->validate([
@@ -22,11 +20,12 @@ class AuthController extends Controller
             'password' => 'required|string|min:8',
             'role'     => ['required', Rule::in(['super_admin', 'admin', 'accountant', 'cashier', 'agent', 'customer'])],
 
-            // شرط الوكيل (Agent): يجب أن يكون له دولة ومدينة
+            // شرط الوكيل: يجب أن يكون له دولة ومدينة ورصيد افتتاحي
             'country_id' => 'required_if:role,agent|exists:countries,id',
             'city_id'    => 'required_if:role,agent|exists:cities,id',
+            'balance'    => 'required_if:role,agent|numeric|min:0', // الرصيد مطلوب للوكيل فقط
 
-            // شرط الموظفين: إذا لم يكن زبوناً ولا وكيلاً، فالمكتب إجباري
+            // شرط الموظفين: المكتب إجباري
             'office_id'  => [
                 Rule::requiredIf(function () use ($request) {
                     return in_array($request->role, ['admin', 'accountant', 'cashier']);
@@ -35,25 +34,43 @@ class AuthController extends Controller
             ],
         ]);
 
-        // معالجة البيانات قبل الحفظ
-        $data = $validated;
-        $data['password'] = Hash::make($request->password);
+        try {
+            $user = DB::transaction(function () use ($request, $validated) {
+                $data = $validated;
+                $data['password'] = Hash::make($request->password);
 
-        // إذا كان agent، نتأكد أن office_id فارغ تماماً
-        if ($request->role === 'agent') {
-            $data['office_id'] = null;
+                // تصفير المكتب في حال كان الوكيل (Agent)
+                if ($request->role === 'agent') {
+                    $data['office_id'] = null;
+                }
+
+                // 1. إنشاء المستخدم
+                $user = User::create($data);
+
+                // 2. إنشاء الصندوق في حال كان المستخدم وكيل (Agent)
+                if ($user->role === 'agent') {
+                    $user->mainSafe()->create([
+                        'balance' => $request->balance,
+                    ]);
+                }
+
+                return $user;
+            });
+
+            $token = $user->createToken('auth_token')->plainTextToken;
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'User (Agent) and Safe created successfully',
+                'data' => $user->load('mainSafe'), // تحميل بيانات الصندوق في الرد
+                'access_token' => $token,
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Registration failed: ' . $e->getMessage()
+            ], 500);
         }
-
-        $user = User::create($data);
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'User registered successfully',
-            'data' => $user,
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-        ], 201);
     }
 
     /**
