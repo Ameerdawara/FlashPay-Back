@@ -5,7 +5,10 @@ use App\Models\Transfer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
-
+use App\Models\MainSafe;
+use App\Models\User;
+use App\Models\Office;
+use Illuminate\Support\Facades\DB;
 class TransferController extends Controller
 {
     /**
@@ -17,9 +20,8 @@ class TransferController extends Controller
         $validated = $request->validate([
             'amount'                => 'required|numeric|min:1',
             'currency_id'           => 'required|exists:currencies,id',
-            // يجب تحديد إما مكتب استلام أو وكيل استلام
-            'destination_office_id' => 'nullable|exists:offices,id|required_without:destination_agent_id',
-            'destination_agent_id'  => 'nullable|exists:users,id|required_without:destination_office_id',
+            'destination_office_id' => 'exists:offices,id|required',
+            'destination_agent_id'  => 'exists:users,id|required',
             'receiver_name'         => 'required|string|max:255',
             'receiver_phone'        => 'required|string|max:20',
         ]);
@@ -49,68 +51,98 @@ class TransferController extends Controller
         ], 201);
     }
 
-    /**
-     * تحديث حالة الحوالة بناءً على الصلاحيات (Role)
-     */
     public function update(Request $request, $id)
     {
         $transfer = Transfer::findOrFail($id);
         $user = Auth::user();
 
-        // 1 (agent)
-        if ($user->role === 'agent') {
-            $request->validate([
-                'status' => 'required|in:pending,waiting'
-            ]);
-            $transfer->status = $request->status;
-        }
+        // نلف العملية كلها داخل Transaction لضمان سلامة البيانات المالية
+        return DB::transaction(function () use ($request, $transfer, $user) {
 
-        // 2.  أدمن أو سوبر أدمن
-        elseif (in_array($user->role, ['admin', 'super_admin'])) {
-            //  إدخال الرسوم (fee)
-            $request->validate([
-                'status' => 'required|in:ready',
-                'fee'    => 'required|numeric|min:0'
-            ]);
-            $transfer->status = $request->status;
-            $transfer->fee = $request->fee;
-        }
+            // 1. المعتمد (Agent) يحول من pending إلى approved أو waiting
+            if ($user->role === 'agent') {
+                $request->validate(['status' => 'required|in:approved,waiting']);
 
-        // 3.  كاشير أو محاسب
-        elseif (in_array($user->role, ['cashier', 'accountant'])) {
-            // يحول الحالة إلى completed، ويجب رفع صورة هوية المستلم
-            $request->validate([
-                'status'            => 'required|in:completed',
-                'receiver_id_image' => 'required|image|mimes:jpeg,png,jpg|max:4096' 
-            ]);
+                // الحالة: الزبون سلم المال للوكيل -> يزيد رصيد صندوق الوكيل
+                if ($request->status === 'approved' && $transfer->status === 'pending') {
+                    $agentSafe = MainSafe::where('owner_id', $user->id)
+                                        ->where('owner_type', 'App\Models\User')
+                                        ->first();
+                    
+                    if (!$agentSafe) throw new \Exception("صندوق الوكيل غير موجود");
+                    $agentSafe->increment('balance', $transfer->amount);
+                }
 
-            // معالجة رفع الصورة
-            if ($request->hasFile('receiver_id_image')) {
-                $file = $request->file('receiver_id_image');
-                $filename = time() . '_' . $file->getClientOriginalName();
-                // تخزين الصورة في مجلد public/receipts
-                $path = $file->storeAs('receipts', $filename, 'public');
-                $transfer->receiver_id_image = $path;
+                $transfer->status = $request->status;
             }
 
-            $transfer->status = $request->status;
-        }
+            // 2. أدمن أو سوبر أدمن يحول إلى ready
+            elseif (in_array($user->role, ['admin', 'super_admin'])) {
+                $request->validate([
+                    'status' => 'required|in:ready',
+                    'fee'    => 'required|numeric|min:0'
+                ]);
 
-        // 4. إذا لم يكن لديه صلاحية
-        else {
+                // الحالة: الحوالة أصبحت جاهزة للتسليم في سوريا
+                // نقل المبلغ من عهدة الوكيل إلى عهدة المكتب
+                if ($request->status === 'ready' && $transfer->status === 'waiting') {
+                    // خصم من صندوق الوكيل (الذي استلم الحوالة أصلاً)
+                    $agentSafe = MainSafe::where('owner_id', $transfer->destination_agent_id)
+                                        ->where('owner_type', 'App\Models\User')
+                                        ->first();
+
+                    // زيادة في صندوق المكتب المستلم (الذي سيسلم الكاش)
+                    $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
+                                         ->where('owner_type', 'App\Models\Office')
+                                         ->first();
+
+                    if (!$agentSafe || !$officeSafe) throw new \Exception("أحد الصناديق (وكيل أو مكتب) غير موجود");
+
+                    $agentSafe->decrement('balance', $transfer->amount);
+                    $officeSafe->increment('balance', $transfer->amount);
+                }
+
+                $transfer->status = $request->status;
+                $transfer->fee = $request->fee;
+            }
+
+            // 3. كاشير أو محاسب يحول إلى completed
+            elseif (in_array($user->role, ['cashier', 'accountant'])) {
+                $request->validate([
+                    'status'            => 'required|in:completed',
+                    'receiver_id_image' => 'required|image|mimes:jpeg,png,jpg|max:4096' 
+                ]);
+
+                // الحالة: المكتب سلم الكاش فعلياً للمستلم -> خصم من رصيد صندوق المكتب
+                if ($request->status === 'completed' && $transfer->status === 'ready') {
+                    $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
+                                         ->where('owner_type', 'App\Models\Office')
+                                         ->first();
+
+                    if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
+                    $officeSafe->decrement('balance', $transfer->amount);
+                }
+
+                // رفع صورة الهوية
+                if ($request->hasFile('receiver_id_image')) {
+                    $path = $request->file('receiver_id_image')->store('receipts', 'public');
+                    $transfer->receiver_id_image = $path;
+                }
+
+                $transfer->status = $request->status;
+            }
+
+            else {
+                return response()->json(['message' => 'ليس لديك صلاحية'], 403);
+            }
+
+            $transfer->save();
+
             return response()->json([
-                'status' => 'error',
-                'message' => 'You do not have permission to update this transfer'
-            ], 403);
-        }
-
-        // حفظ التعديلات في قاعدة البيانات
-        $transfer->save();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Transfer updated successfully',
-            'data' => $transfer
-        ], 200);
+                'status' => 'success',
+                'message' => 'تم تحديث الحوالة وتعديل الصناديق بنجاح',
+                'data' => $transfer->load(['sender', 'currency']) // تحميل علاقات إضافية إذا رغبت
+            ], 200);
+        });
     }
 }
