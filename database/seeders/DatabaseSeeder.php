@@ -19,7 +19,8 @@ class DatabaseSeeder extends Seeder
         $this->call([
             CountrySeeder::class,
             CitySeeder::class,
-            CurrencySeeder::class
+            CurrencySeeder::class,
+            SuperAdminSeeder::class,
         ]);
         \App\Models\User::create([
             'name' => 'Ameer Admin',
