@@ -22,13 +22,6 @@ class DatabaseSeeder extends Seeder
             CurrencySeeder::class,
             SuperAdminSeeder::class,
         ]);
-        \App\Models\User::create([
-            'name' => 'Ameer Admin',
-            'email' => 'admin@flashpay.com',
-            'phone' => '0931234567', // تأكد من إضافة رقم هاتف
-            'password' => bcrypt('password'),
-            'role' => 'admin',
-            'country_id' => 1, // ربطه بأول دولة من الـ Seeder
-        ]);
+       
     }
 }
