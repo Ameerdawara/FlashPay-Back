@@ -6,5 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class Currency extends Model
 {
-    //
+    protected $fillable = ['name', 'code', 'price'];
+    public function transfers()
+    {
+        return $this->hasMany(Transfer::class);
+    }
+    public function tradingSafes()
+    {
+
+        return $this->hasMany(TradingSafe::class);
+    }
 }

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class MainSafe extends Model
 {
+    protected $fillable = ['balance'];
     public function owner()
     {
         return $this->morphTo();

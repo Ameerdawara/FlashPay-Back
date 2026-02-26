@@ -15,11 +15,12 @@ return new class extends Migration
             $table->id();
             $table->foreignId('office_id')->nullable()->constrained(); // للموظفين في سوريا
             $table->foreignId('country_id')->nullable()->constrained(); // للمناديب في الخارج
+            $table->foreignId('city_id')->nullable()->constrained();
             $table->string('name');
             $table->string('email')->unique();
             $table->string('phone')->unique();
             $table->string('password');
-            $table->enum('role', ['admin', 'accountant', 'cashier', 'agent', 'customer'])->default('customer');
+            $table->enum('role', ['super_admin','admin', 'accountant', 'cashier', 'agent', 'customer'])->default('customer');
             $table->timestamps();
         });
         Schema::create('password_reset_tokens', function (Blueprint $table) {

@@ -31,7 +31,7 @@ return new class extends Migration
             $table->string('receiver_phone');
             $table->string('receiver_id_image')->nullable(); // مسار صورة الهوية
 
-            $table->enum('status', ['pending', 'approved', 'ready', 'completed', 'cancelled'])->default('pending');
+            $table->enum('status', ['pending', 'approved','waiting' ,'ready', 'completed', 'cancelled'])->default('pending');
             $table->timestamps();
         });
     }
