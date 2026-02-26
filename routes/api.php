@@ -32,6 +32,11 @@ Route::get('/currencies', [CurrencyController::class,'index']);
 | Protected Routes (المسارات المحمية - تحتاج Token)
 |--------------------------------------------------------------------------
 */
+Route::middleware('auth:sanctum')->get('/me', function (Request $request) {
+    return response()->json([
+        'user' => $request->user()
+    ]);
+});
 Route::middleware('auth:sanctum')->group(function () {
 
     // 1. المستخدم والحساب
