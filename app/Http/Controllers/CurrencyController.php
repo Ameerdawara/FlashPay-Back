@@ -7,10 +7,26 @@ use Illuminate\Http\Request;
 
 class CurrencyController extends Controller
 {
+    public function index()
+    {
+        return response()->json(Currency::all(), 200);
+    }
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'name'  => 'required|string|max:255',
+            'code'  => 'required|string|max:10|unique:currencies,code',
+            'price' => 'nullable|string'
+        ]);
 
-    /**
-     * تحديث سعر العملة فقط باستخدام المعرف أو الكود
-     */
+        $currency = Currency::create($validated);
+        return response()->json($currency, 201);
+    }
+    public function show($id)
+    {
+        $currency = Currency::findOrFail($id);
+        return response()->json($currency, 200);
+    }
     public function updatePrice(Request $request, $identifier)
     {
         // 1. التحقق من صحة السعر المرسل
@@ -20,8 +36,8 @@ class CurrencyController extends Controller
 
         // 2. البحث عن العملة سواء كان المعرف ID رقمي أو Code نصي
         $currency = Currency::where('id', $identifier)
-                            ->orWhere('code', $identifier)
-                            ->first();
+            ->orWhere('code', $identifier)
+            ->first();
 
         if (!$currency) {
             return response()->json([
