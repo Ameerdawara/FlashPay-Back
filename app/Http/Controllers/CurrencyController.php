@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 
 class CurrencyController extends Controller
 {
+
     /**
      * تحديث سعر العملة فقط باستخدام المعرف أو الكود
      */

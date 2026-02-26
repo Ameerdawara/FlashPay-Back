@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Transfer;
@@ -9,6 +10,7 @@ use App\Models\MainSafe;
 use App\Models\User;
 use App\Models\Office;
 use Illuminate\Support\Facades\DB;
+
 class TransferController extends Controller
 {
     /**
@@ -39,7 +41,7 @@ class TransferController extends Controller
             'destination_agent_id'  => $validated['destination_agent_id'] ?? null,
             'receiver_name'         => $validated['receiver_name'],
             'receiver_phone'        => $validated['receiver_phone'],
-            'status'                => 'pending', 
+            'status'                => 'pending',
             'fee'                   => 0, // الرسوم تبقى 0 (أو null حسب الداتا بيز)
             'receiver_id_image'     => null, // الصورة تبقى null
         ]);
@@ -66,9 +68,9 @@ class TransferController extends Controller
                 // الحالة: الزبون سلم المال للوكيل -> يزيد رصيد صندوق الوكيل
                 if ($request->status === 'approved' && $transfer->status === 'pending') {
                     $agentSafe = MainSafe::where('owner_id', $user->id)
-                                        ->where('owner_type', 'App\Models\User')
-                                        ->first();
-                    
+                        ->where('owner_type', 'App\Models\User')
+                        ->first();
+
                     if (!$agentSafe) throw new \Exception("صندوق الوكيل غير موجود");
                     $agentSafe->increment('balance', $transfer->amount);
                 }
@@ -88,16 +90,21 @@ class TransferController extends Controller
                 if ($request->status === 'ready' && $transfer->status === 'waiting') {
                     // خصم من صندوق الوكيل (الذي استلم الحوالة أصلاً)
                     $agentSafe = MainSafe::where('owner_id', $transfer->destination_agent_id)
-                                        ->where('owner_type', 'App\Models\User')
-                                        ->first();
+                        ->where('owner_type', 'App\Models\User')
+                        ->first();
 
                     // زيادة في صندوق المكتب المستلم (الذي سيسلم الكاش)
                     $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
-                                         ->where('owner_type', 'App\Models\Office')
-                                         ->first();
+                        ->where('owner_type', 'App\Models\Office')
+                        ->first();
 
-                    if (!$agentSafe || !$officeSafe) throw new \Exception("أحد الصناديق (وكيل أو مكتب) غير موجود");
+                    if (!$agentSafe) {
+                        throw new \Exception("صندوق الوكيل رقم ({$transfer->destination_agent_id}) غير موجود في النظام.");
+                    }
 
+                    if (!$officeSafe) {
+                        throw new \Exception("صندوق المكتب رقم ({$transfer->destination_office_id}) غير موجود في النظام.");
+                    }
                     $agentSafe->decrement('balance', $transfer->amount);
                     $officeSafe->increment('balance', $transfer->amount);
                 }
@@ -110,14 +117,14 @@ class TransferController extends Controller
             elseif (in_array($user->role, ['cashier', 'accountant'])) {
                 $request->validate([
                     'status'            => 'required|in:completed',
-                    'receiver_id_image' => 'required|image|mimes:jpeg,png,jpg|max:4096' 
+                    'receiver_id_image' => 'required|image|mimes:jpeg,png,jpg|max:4096'
                 ]);
 
                 // الحالة: المكتب سلم الكاش فعلياً للمستلم -> خصم من رصيد صندوق المكتب
                 if ($request->status === 'completed' && $transfer->status === 'ready') {
                     $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
-                                         ->where('owner_type', 'App\Models\Office')
-                                         ->first();
+                        ->where('owner_type', 'App\Models\Office')
+                        ->first();
 
                     if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
                     $officeSafe->decrement('balance', $transfer->amount);
@@ -130,9 +137,7 @@ class TransferController extends Controller
                 }
 
                 $transfer->status = $request->status;
-            }
-
-            else {
+            } else {
                 return response()->json(['message' => 'ليس لديك صلاحية'], 403);
             }
 
