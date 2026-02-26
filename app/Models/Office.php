@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Office extends Model
 {
-    protected $fillable = ['office_id', 'currency_id', 'balance', 'cost'];
+    protected $fillable = ['city_id','address','office_id','name' ,'currency_id', 'balance', 'cost'];
     public function city()
     {
         return $this->belongsTo(City::class);

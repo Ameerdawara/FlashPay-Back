@@ -24,6 +24,7 @@ Route::post('/login', [AuthController::class, 'login']);
 // مسارات العرض فقط (يمكن جعلها عامة أو محمية حسب رغبتك)
 Route::get('/countries', [CountryController::class, 'index']);
 Route::get('/cities', [CityController::class, 'index']);
+Route::get('/currencies', [CurrencyController::class,'index']);
 
 
 /*
