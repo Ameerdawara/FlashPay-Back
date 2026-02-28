@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Office extends Model
 {
-    protected $fillable = ['office_id', 'currency_id', 'balance', 'cost',
+    protected $fillable = ['office_id', 'currency_id',  'cost',
     'city_id',
     'name',
     'address',

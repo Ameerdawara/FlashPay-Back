@@ -12,7 +12,7 @@ class OfficeController extends Controller
     // 1. عرض كل المكاتب (Index)
     public function index()
     {
-        $offices = Office::with('city')->get(); // جلب المكاتب مع معلومات مدنها
+        $offices = Office::with(['city', 'mainSafe'])->get(); // جلب المكاتب مع معلومات مدنها
         return response()->json([
             'status' => 'success',
             'data' => $offices
@@ -60,7 +60,7 @@ class OfficeController extends Controller
         // جلب المكتب مع صناديقه لإعادتها في الرد
         return response()->json([
             'status' => 'success',
-            'data' => $office->load(['mainSafe', 'tradingSafes']) 
+            'data' => $office->load(['mainSafe', 'tradingSafes'])
         ], 201);
 
     } catch (\Exception $e) {

@@ -11,7 +11,7 @@ use App\Http\Controllers\TransferController;
 use App\Http\Controllers\TradingSafeController; // لا تنسى استدعاء الكونترولر الجديد
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-
+use App\Models\User;
 /*
 |--------------------------------------------------------------------------
 | Public Routes (المسارات العامة)
@@ -39,7 +39,16 @@ Route::middleware('auth:sanctum')->get('/me', function (Request $request) {
     ]);
 });
 Route::middleware('auth:sanctum')->group(function () {
-
+    // جلب قائمة الموظفين (Users)
+    Route::get('/users', function () {
+        // نستخدم with('office') لجلب بيانات المكتب المرتبط لكي لا يحدث خطأ في الواجهة الأمامية
+       
+        $users = User::with(['city','country','office'])->get();
+        return response()->json([
+            'status' => 'success',
+            'data' => $users
+        ]);
+    });
     // 1. المستخدم والحساب
     Route::get('/user', function (Request $request) {
         return $request->user();
