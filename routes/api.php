@@ -42,12 +42,30 @@ Route::middleware('auth:sanctum')->group(function () {
     // جلب قائمة الموظفين (Users)
     Route::get('/users', function () {
         // نستخدم with('office') لجلب بيانات المكتب المرتبط لكي لا يحدث خطأ في الواجهة الأمامية
-       
+
         $users = User::with(['city','country','office'])->get();
         return response()->json([
             'status' => 'success',
             'data' => $users
         ]);
+    });
+    Route::put('/users/{id}', function (Request $request, $id) {
+        if ($request->user()->role !== 'super_admin') return response()->json(['message' => 'غير مصرح لك'], 403);
+
+        $user = App\Models\User::findOrFail($id);
+        $user->update($request->all());
+        if ($request->has('password')) {
+            $user->password = Illuminate\Support\Facades\Hash::make($request->password);
+            $user->save();
+        }
+        return response()->json(['status' => 'success', 'data' => $user]);
+    });
+
+    Route::delete('/users/{id}', function (Request $request, $id) {
+        if ($request->user()->role !== 'super_admin') return response()->json(['message' => 'غير مصرح لك'], 403);
+
+        App\Models\User::destroy($id);
+        return response()->json(['status' => 'success']);
     });
     // 1. المستخدم والحساب
     Route::get('/user', function (Request $request) {
