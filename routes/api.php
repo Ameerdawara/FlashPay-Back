@@ -49,6 +49,16 @@ Route::middleware('auth:sanctum')->group(function () {
             'data' => $users
         ]);
     });
+
+    // الموظف العادي يرى المكاتب فقط (index)
+    Route::get('/offices', [OfficeController::class, 'index']);
+
+    // العمليات الحساسة فقط للآدمن
+    Route::middleware('can:manage-offices')->group(function () {
+        Route::post('/offices', [OfficeController::class, 'store']);
+        Route::put('/offices/{office}', [OfficeController::class, 'update']);
+        Route::delete('/offices/{office}', [OfficeController::class, 'destroy']);
+    });
     Route::put('/users/{id}', function (Request $request, $id) {
         if ($request->user()->role !== 'super_admin') return response()->json(['message' => 'غير مصرح لك'], 403);
 

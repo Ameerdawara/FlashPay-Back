@@ -18,8 +18,69 @@ class OfficeController extends Controller
             'data' => $offices
         ], 200);
     }
+// 4. تعديل مكتب (Update)
+public function update(Request $request, $id)
+{
+    // التأكد أن المستخدم هو super_admin
+    if ($request->user()->role !== 'super_admin') {
+        return response()->json(['message' => 'غير مصرح لك بالقيام بهذه العملية'], 403);
+    }
 
+    $office = Office::find($id);
+    if (!$office) {
+        return response()->json(['message' => 'المكتب غير موجود'], 404);
+    }
 
+    $validated = $request->validate([
+        'city_id' => 'sometimes|exists:cities,id',
+        'name'    => 'sometimes|string|max:255|unique:offices,name,' . $id,
+        'address' => 'nullable|string',
+    ]);
+
+    $office->update($validated);
+
+    return response()->json(['status' => 'success', 'data' => $office]);
+}
+public function destroy(Request $request, $id)
+{
+    // 1. التحقق من الصلاحية (فقط super_admin)
+    if ($request->user()->role !== 'super_admin') {
+        return response()->json(['message' => 'غير مصرح لك بحذف المكاتب'], 403);
+    }
+
+    $office = Office::find($id);
+    if (!$office) {
+        return response()->json(['message' => 'المكتب غير موجود'], 404);
+    }
+
+    try {
+        DB::transaction(function () use ($office) {
+            // 2. حذف الصناديق المرتبطة بالمكتب أولاً لتجنب خطأ الـ Foreign Key
+            // (بفرض أن العلاقة هي mainSafe و tradingSafes)
+            $office->mainSafe()->delete();
+            $office->tradingSafes()->delete();
+
+            // 3. التعامل مع الموظفين: إما حذفهم أو جعل مكتبهم null
+            // هنا سنقوم بفك ارتباط الموظفين بالمكتب المحذوف
+            \App\Models\User::where('office_id', $office->id)->update(['office_id' => null]);
+
+            // 4. حذف المكتب
+            $office->delete();
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'تم حذف المكتب وكل متعلقاته بنجاح'
+        ], 200);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'فشل الحذف: قد يكون المكتب مرتبطاً بحوالات أو عمليات مالية لا يمكن حذفها.',
+            'error' => $e->getMessage() // اطلّع على هذا في Console لتعرف السبب الدقيق
+        ], 500);
+    }
+}
    public function store(Request $request)
 {
     $validated = $request->validate([
@@ -70,16 +131,5 @@ class OfficeController extends Controller
         ], 500);
     }
 }
-    // 5. حذف مكتب (Destroy)
-    public function destroy($id)
-    {
-        $office = Office::find($id);
-        if (!$office) {
-            return response()->json(['message' => 'Office not found'], 404);
-        }
 
-        // ملاحظة: في أنظمة الحوالات يفضل الـ Soft Delete، لكن هنا سنحذف نهائياً
-        $office->delete();
-        return response()->json(['status' => 'success', 'message' => 'Office deleted'], 200);
-    }
 }
