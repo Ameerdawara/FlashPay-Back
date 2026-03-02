@@ -11,14 +11,6 @@ use Illuminate\Support\Facades\DB;
 
 class AuthController extends Controller
 {
-//    public function index()
-//     {
-//         $users = User::with(['office'])->get(); // جلب المكاتب مع معلومات مدنها
-//         return response()->json([
-//             'status' => 'success',
-//             'data' => $users
-//         ], 200);
-//     }
     public function register(Request $request)
     {
         $validated = $request->validate([

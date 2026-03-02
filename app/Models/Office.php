@@ -6,7 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class Office extends Model
 {
-    protected $fillable = ['city_id','address','office_id','name' ,'currency_id', 'balance', 'cost'];
+    protected $fillable = ['office_id', 'currency_id',  'cost',
+    'city_id',
+    'name',
+    'address',
+    'status'];
     public function city()
     {
         return $this->belongsTo(City::class);
@@ -30,5 +34,5 @@ class Office extends Model
     {
         return $this->hasMany(TradingTransaction::class);
     }
-    
+
 }
