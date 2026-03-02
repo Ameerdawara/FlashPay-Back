@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Auth;
 
 class TradingSafeController extends Controller
 {
+
+
     private function authorizeTrading($requestedOfficeId)
     {
         $user = Auth::user();

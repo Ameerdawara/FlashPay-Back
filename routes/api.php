@@ -1,5 +1,5 @@
 <?php
-
+use App\Http\Controllers\MainSafeController;    
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\ConversationController;
@@ -49,6 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
             'data' => $users
         ]);
     });
+    Route::get('/safes', [MainSafeController::class, 'index']);
 
     // الموظف العادي يرى المكاتب فقط (index)
     Route::get('/offices', [OfficeController::class, 'index']);
