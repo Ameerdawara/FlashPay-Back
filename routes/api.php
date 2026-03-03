@@ -1,5 +1,5 @@
 <?php
-use App\Http\Controllers\MainSafeController;    
+use App\Http\Controllers\MainSafeController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\ConversationController;

@@ -13,6 +13,24 @@ use Illuminate\Support\Facades\DB;
 
 class TransferController extends Controller
 {
+
+public function index(Request $request)
+    {
+        $query = Transfer::query();
+
+        // الفلترة حسب الحالة الممررة في الرابط (?status=pending)
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // جلب الحوالات مع بيانات المرسل
+        $transfers = $query->with('sender')->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $transfers
+        ], 200);
+    }   
     /**
      * إنشاء حوالة جديدة (مخصصة للمستخدم/الزبون)
      */
