@@ -114,4 +114,17 @@ class AuthController extends Controller
             'message' => 'Logged out successfully'
         ]);
     }
+    /**
+     * جلب قائمة الوكلاء
+     */
+    public function getAgents()
+    {
+        // جلب المستخدمين الذين يملكون دور "agent" فقط
+        $agents = User::where('role', 'agent')->select('id', 'name', 'phone')->get();
+        
+        return response()->json([
+            'status' => 'success',
+            'data' => $agents
+        ], 200);
+    }
 }

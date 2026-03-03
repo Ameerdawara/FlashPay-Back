@@ -8,6 +8,7 @@ use App\Http\Controllers\CurrencyController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\OfficeController;
 use App\Http\Controllers\TransferController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\TradingSafeController; // لا تنسى استدعاء الكونترولر الجديد
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -49,6 +50,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('offices', OfficeController::class);
     Route::apiResource('countries', CountryController::class)->except(['index']);
     Route::apiResource('cities', CityController::class)->except(['index']);
+
+    // مسارات الملف الشخصي وسجل الحوالات
+    Route::get('/profile', [ProfileController::class, 'index']);
+    Route::put('/profile/update', [ProfileController::class, 'update']);
+
+
+    Route::get('/agents', [\App\Http\Controllers\AuthController::class, 'getAgents']);
 
     // 3. العملات
     Route::put('/currencies/update-price/{identifier}', [CurrencyController::class, 'updatePrice']);

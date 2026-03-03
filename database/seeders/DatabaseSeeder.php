@@ -30,5 +30,6 @@ class DatabaseSeeder extends Seeder
             'role' => 'admin',
             'country_id' => 1, // ربطه بأول دولة من الـ Seeder
         ]);
+        
     }
 }
