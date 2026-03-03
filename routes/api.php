@@ -1,5 +1,5 @@
 <?php
-
+use App\Http\Controllers\MainSafeController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\ConversationController;
@@ -12,7 +12,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\TradingSafeController; // لا تنسى استدعاء الكونترولر الجديد
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-
+use App\Models\User;
 /*
 |--------------------------------------------------------------------------
 | Public Routes (المسارات العامة)
@@ -33,13 +33,52 @@ Route::get('/currencies', [CurrencyController::class,'index']);
 | Protected Routes (المسارات المحمية - تحتاج Token)
 |--------------------------------------------------------------------------
 */
+
 Route::middleware('auth:sanctum')->get('/me', function (Request $request) {
     return response()->json([
         'user' => $request->user()
     ]);
 });
 Route::middleware('auth:sanctum')->group(function () {
+    // جلب قائمة الموظفين (Users)
+    Route::get('/users', function () {
+        // نستخدم with('office') لجلب بيانات المكتب المرتبط لكي لا يحدث خطأ في الواجهة الأمامية
 
+        $users = User::with(['city','country','office'])->get();
+        return response()->json([
+            'status' => 'success',
+            'data' => $users
+        ]);
+    });
+    Route::get('/safes', [MainSafeController::class, 'index']);
+
+    // الموظف العادي يرى المكاتب فقط (index)
+    Route::get('/offices', [OfficeController::class, 'index']);
+
+    // العمليات الحساسة فقط للآدمن
+    Route::middleware('can:manage-offices')->group(function () {
+        Route::post('/offices', [OfficeController::class, 'store']);
+        Route::put('/offices/{office}', [OfficeController::class, 'update']);
+        Route::delete('/offices/{office}', [OfficeController::class, 'destroy']);
+    });
+    Route::put('/users/{id}', function (Request $request, $id) {
+        if ($request->user()->role !== 'super_admin') return response()->json(['message' => 'غير مصرح لك'], 403);
+
+        $user = App\Models\User::findOrFail($id);
+        $user->update($request->all());
+        if ($request->has('password')) {
+            $user->password = Illuminate\Support\Facades\Hash::make($request->password);
+            $user->save();
+        }
+        return response()->json(['status' => 'success', 'data' => $user]);
+    });
+
+    Route::delete('/users/{id}', function (Request $request, $id) {
+        if ($request->user()->role !== 'super_admin') return response()->json(['message' => 'غير مصرح لك'], 403);
+
+        App\Models\User::destroy($id);
+        return response()->json(['status' => 'success']);
+    });
     // 1. المستخدم والحساب
     Route::get('/user', function (Request $request) {
         return $request->user();
@@ -62,6 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/currencies/update-price/{identifier}', [CurrencyController::class, 'updatePrice']);
 
     // 4. الحوالات (Transfers)
+    Route::get('/transfers', [TransferController::class, 'index']);
     Route::post('/transfers', [TransferController::class, 'store']);
     Route::patch('/transfers/{id}/update-status', [TransferController::class, 'update']);
 
