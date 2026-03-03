@@ -92,6 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/currencies/update-price/{identifier}', [CurrencyController::class, 'updatePrice']);
 
     // 4. الحوالات (Transfers)
+    Route::get('/transfers', [TransferController::class, 'index']);
     Route::post('/transfers', [TransferController::class, 'store']);
     Route::patch('/transfers/{id}/update-status', [TransferController::class, 'update']);
 

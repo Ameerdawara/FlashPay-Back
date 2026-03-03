@@ -30,7 +30,7 @@ public function index(Request $request)
             'status' => 'success',
             'data' => $transfers
         ], 200);
-    }   
+    }
     /**
      * إنشاء حوالة جديدة (مخصصة للمستخدم/الزبون)
      */
