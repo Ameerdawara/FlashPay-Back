@@ -25,6 +25,7 @@ public function index(Request $request)
 
         // جلب الحوالات مع بيانات المرسل
         $transfers = $query->with('sender')->get();
+$transfers = Transfer::with('currency')->where('status', 'ready')->get();
 
         return response()->json([
             'status' => 'success',
