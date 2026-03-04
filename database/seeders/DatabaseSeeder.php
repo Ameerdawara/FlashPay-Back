@@ -43,5 +43,6 @@ class DatabaseSeeder extends Seeder
             'receiver_id_image' => null,
             'status' => 'pending' // الحالة الافتراضية
         ]);
+        
     }
 }
