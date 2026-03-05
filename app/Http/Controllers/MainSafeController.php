@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 
 class MainSafeController extends Controller
 {
-  public function index()
+    public function index()
     {
         $result = [];
 
@@ -23,11 +23,12 @@ class MainSafeController extends Controller
             if (!$office->mainSafe) continue;
 
             $result[] = [
-                'type' => 'office_main',
-                'owner' => $office->name,
-                'currency' => 'USD',
-                'balance' => $office->mainSafe->balance,
-                'cost' => null,
+                'type'      => 'office_main',
+                'office_id' => $office->id, // 👈 أضفنا هذا السطر
+                'owner'     => $office->name,
+                'currency'  => 'USD',
+                'balance'   => $office->mainSafe->balance,
+                'cost'      => null,
             ];
         }
 
@@ -44,11 +45,12 @@ class MainSafeController extends Controller
             if (!$agent->mainSafe) continue;
 
             $result[] = [
-                'type' => 'agent_main',
-                'owner' => $agent->name,
-                'currency' => 'USD',
-                'balance' => $agent->mainSafe->balance,
-                'cost' => null,
+                'type'      => 'agent_main',
+                'office_id' => null, // 👈 الوكيل ليس له مكتب، نتركه Null
+                'owner'     => $agent->name,
+                'currency'  => 'USD',
+                'balance'   => $agent->mainSafe->balance,
+                'cost'      => null,
             ];
         }
 
@@ -61,17 +63,18 @@ class MainSafeController extends Controller
 
         foreach ($tradingSafes as $safe) {
             $result[] = [
-                'type' => 'trading',
-                'owner' => $safe->office->name ?? '-',
-                'currency' => $safe->currency->code ?? '',
-                'balance' => $safe->balance,
-                'cost' => $safe->cost,
+                'type'      => 'trading',
+                'office_id' => $safe->office_id, // 👈 أضفنا هذا السطر
+                'owner'     => $safe->office->name ?? '-',
+                'currency'  => $safe->currency->code ?? '',
+                'balance'   => $safe->balance,
+                'cost'      => $safe->cost,
             ];
         }
 
         return response()->json([
             'status' => 'success',
-            'data' => $result
+            'data'   => $result
         ]);
     }
 }
