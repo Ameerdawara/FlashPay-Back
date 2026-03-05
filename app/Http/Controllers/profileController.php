@@ -13,15 +13,24 @@ class ProfileController extends Controller
     /**
      * جلب بيانات الملف الشخصي مع سجل الحوالات
      */
-    public function index(Request $request)
+  public function index(Request $request)
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // جلب سجل الحوالات التي أرسلها هذا المستخدم، مرتبة من الأحدث للأقدم
-        $transferHistory = Transfer::with('currency')
-            ->where('sender_id', $user->id)
-            ->orderBy('created_at', 'desc')
-            ->get();
+        // نبني الاستعلام الأساسي مع جلب بيانات العملة
+        $query = Transfer::with('currency')->orderBy('created_at', 'desc');
+
+        // إذا كان المستخدم وكيل، نجلب الحوالات الموجهة إليه
+        if ($user->role === 'agent') {
+            $query->where('destination_agent_id', $user->id);
+        } 
+        // إذا كان زبون عادي (Customer)، نجلب الحوالات التي أرسلها
+        else {
+            $query->where('sender_id', $user->id);
+        }
+
+        $transferHistory = $query->get();
 
         return response()->json([
             'status' => 'success',
