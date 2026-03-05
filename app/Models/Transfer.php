@@ -20,7 +20,8 @@ class Transfer extends Model
         'receiver_name',
         'receiver_phone',
         'receiver_id_image',
-        'status'
+        'status',
+        'amount_in_usd'
     ];
     public function sender()
     {
