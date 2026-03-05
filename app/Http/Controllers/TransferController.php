@@ -29,8 +29,9 @@ public function index(Request $request)
             $query->where('status', $request->status);
         }
 
-        // جلب الحوالات مع بيانات المرسل والعملة
-        $transfers = $query->with(['sender', 'currency'])->orderBy('created_at', 'desc')->get();
+        // جلب الحوالات مع بيانات المرسل
+        $transfers = $query->with('sender')->get();
+$transfers = Transfer::with('currency')->where('status', 'ready')->get();
 
         return response()->json([
             'status' => 'success',
