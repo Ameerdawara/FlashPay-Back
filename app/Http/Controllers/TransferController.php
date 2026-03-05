@@ -16,7 +16,13 @@ class TransferController extends Controller
 
 public function index(Request $request)
     {
+        $user = Auth::user();
         $query = Transfer::query();
+
+        // 1. أمان: إذا كان المستخدم وكيل، اجلب الحوالات الموجهة له فقط
+        if ($user->role === 'agent') {
+            $query->where('destination_agent_id', $user->id);
+        }
 
         // الفلترة حسب الحالة الممررة في الرابط (?status=pending)
         if ($request->has('status')) {
@@ -74,15 +80,15 @@ $transfers = Transfer::with('currency')->where('status', 'ready')->get();
 
     public function update(Request $request, $id)
     {
-        $transfer = Transfer::findOrFail($id);
+       $transfer = Transfer::findOrFail($id);
         $user = Auth::user();
 
-        // نلف العملية كلها داخل Transaction لضمان سلامة البيانات المالية
         return DB::transaction(function () use ($request, $transfer, $user) {
 
-            // 1. المعتمد (Agent) يحول من pending إلى approved أو waiting
+            // 1. المعتمد (Agent) يحول من pending إلى approved أو rejected
             if ($user->role === 'agent') {
-                $request->validate(['status' => 'required|in:approved,waiting']);
+                // أضفنا 'rejected' هنا ليتمكن من الرفض
+                $request->validate(['status' => 'required|in:approved,waiting,rejected']); 
 
                 // الحالة: الزبون سلم المال للوكيل -> يزيد رصيد صندوق الوكيل
                 if ($request->status === 'approved' && $transfer->status === 'pending') {
