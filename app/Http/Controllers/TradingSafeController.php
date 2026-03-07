@@ -147,4 +147,57 @@ class TradingSafeController extends Controller
             'report' => $report
         ]);
     }
+
+    /**
+     * تقرير تفصيلي بكل عمليات التداول لمكتب محدد في تاريخ محدد
+     * - الكاشير والأدمن: يرون مكتبهم فقط (من التوكن)
+     * - السوبر أدمن: يختار أي مكتب عبر ?office_id=X
+     */
+    public function detailedReport(Request $request)
+    {
+        if (!Auth::check()) {
+            return response()->json(['message' => 'غير مصرح لك'], 401);
+        }
+
+        $user = Auth::user();
+
+        // تحديد المكتب المستهدف
+        if ($user->role === 'super_admin') {
+            // السوبر أدمن يمرر office_id كـ query param
+            $officeId = $request->query('office_id');
+            if (!$officeId) {
+                return response()->json(['message' => 'يرجى تحديد المكتب'], 422);
+            }
+        } else {
+            // بقية الأدوار: مكتبهم الخاص فقط
+            $officeId = $user->office_id;
+            if (!$officeId) {
+                return response()->json(['message' => 'لم يتم تعيينك لأي مكتب'], 403);
+            }
+        }
+
+        $date = $request->query('date', now()->toDateString());
+
+        // جلب كل العمليات مع العلاقات
+        $transactions = TradingTransaction::with(['currency', 'user'])
+            ->where('office_id', $officeId)
+            ->where('transaction_date', $date)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // ملخص إجمالي
+        $summary = [
+            'total_bought'     => $transactions->where('type', 'buy')->sum('amount'),
+            'total_sold'       => $transactions->where('type', 'sell')->sum('amount'),
+            'total_net_profit' => $transactions->sum('profit'),
+        ];
+
+        return response()->json([
+            'status'       => 'success',
+            'date'         => $date,
+            'office_id'    => $officeId,
+            'summary'      => $summary,
+            'transactions' => $transactions,
+        ]);
+    }
 }

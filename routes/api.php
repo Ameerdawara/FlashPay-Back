@@ -85,6 +85,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/trading/report', [TradingSafeController::class, 'dailyReport']);
+    Route::get('/trading/report/details', [TradingSafeController::class, 'detailedReport']);
     // 2. إدارة المكاتب والدول والمدن (صلاحيات كاملة)
     Route::apiResource('offices', OfficeController::class);
     Route::apiResource('countries', CountryController::class)->except(['index']);
@@ -99,7 +100,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // 3. العملات
     Route::put('/currencies/update-price/{identifier}', [CurrencyController::class, 'updatePrice']);
-
+Route::get('/main-safes', [MainSafeController::class, 'index']);
     // 4. الحوالات (Transfers)
     Route::get('/transfers', [TransferController::class, 'index']);
     Route::post('/transfers', [TransferController::class, 'store']);

@@ -63,14 +63,15 @@ class MainSafeController extends Controller
 
         foreach ($tradingSafes as $safe) {
             $result[] = [
-                'type'      => 'trading',
-                'office_id' => $safe->office_id, // 👈 أضفنا هذا السطر
-                'owner'     => $safe->office->name ?? '-',
-                'currency'  => $safe->currency->code ?? '',
-                'balance'   => $safe->balance,
-                'cost'      => $safe->cost,
+                'type'        => 'trading',
+                'office_id'   => $safe->office_id,
+                'currency_id' => $safe->currency_id, // أضف هذا السطر ضروري جداً
+                'owner'       => $safe->office->name ?? '-',
+                'currency'    => $safe->currency->code ?? '',
+                'balance'     => $safe->balance,
+                'cost'        => $safe->cost,
             ];
-        }
+        }   
 
         return response()->json([
             'status' => 'success',
