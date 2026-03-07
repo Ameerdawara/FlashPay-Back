@@ -1,5 +1,5 @@
 <?php
-
+use App\Http\Controllers\MainSafeController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\ConversationController;
@@ -8,6 +8,7 @@ use App\Http\Controllers\CurrencyController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\OfficeController;
 use App\Http\Controllers\TransferController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\TradingSafeController; // لا تنسى استدعاء الكونترولر الجديد
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -49,6 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
             'data' => $users
         ]);
     });
+    Route::get('/safes', [MainSafeController::class, 'index']);
 
     // الموظف العادي يرى المكاتب فقط (index)
     Route::get('/offices', [OfficeController::class, 'index']);
@@ -86,11 +88,20 @@ Route::middleware('auth:sanctum')->group(function () {
     // 2. إدارة المكاتب والدول والمدن (صلاحيات كاملة)
     Route::apiResource('offices', OfficeController::class);
     Route::apiResource('countries', CountryController::class)->except(['index']);
-    Route::get('/cities', [CityController::class, 'index']);
+    Route::apiResource('cities', CityController::class)->except(['index']);
+
+    // مسارات الملف الشخصي وسجل الحوالات
+    Route::get('/profile', [ProfileController::class, 'index']);
+    Route::put('/profile/update', [ProfileController::class, 'update']);
+
+
+    Route::get('/agents', [\App\Http\Controllers\AuthController::class, 'getAgents']);
+
     // 3. العملات
     Route::put('/currencies/update-price/{identifier}', [CurrencyController::class, 'updatePrice']);
 
     // 4. الحوالات (Transfers)
+    Route::get('/transfers', [TransferController::class, 'index']);
     Route::post('/transfers', [TransferController::class, 'store']);
     Route::patch('/transfers/{id}/update-status', [TransferController::class, 'update']);
 

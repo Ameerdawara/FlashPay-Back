@@ -13,6 +13,30 @@ use Illuminate\Support\Facades\DB;
 
 class TransferController extends Controller
 {
+
+    public function index(Request $request)
+    {
+        $user = Auth::user();
+        $query = Transfer::query();
+
+        // 1. أمان: إذا كان المستخدم وكيل، اجلب الحوالات الموجهة له فقط
+        if ($user->role === 'agent') {
+            $query->where('destination_agent_id', $user->id);
+        }
+
+        // الفلترة حسب الحالة الممررة في الرابط (?status=pending)
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // جلب الحوالات مع بيانات المرسل والعملة، وترتيبها من الأحدث للأقدم
+        $transfers = $query->with(['sender', 'currency'])->orderBy('created_at', 'desc')->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $transfers
+        ], 200);
+    }
     /**
      * إنشاء حوالة جديدة (مخصصة للمستخدم/الزبون)
      */
@@ -32,18 +56,28 @@ class TransferController extends Controller
         $trackingCode = 'TRX-' . strtoupper(Str::random(8));
 
         // 3. إنشاء الحوالة
+
+
+        // 1. جلب العملة لمعرفة سعر صرفها الحالي
+        $currency = \App\Models\Currency::findOrFail($validated['currency_id']);
+
+        // 2. حساب القيمة بالدولار (المبلغ / سعر الصرف)
+        $amountInUsd = $validated['amount'] / $currency->price;
+
+        // 3. إنشاء الحوالة
         $transfer = Transfer::create([
             'tracking_code'         => $trackingCode,
-            'sender_id'             => Auth::id(), // سحب الـ id للمستخدم المسجل دخوله
+            'sender_id'             => Auth::id(),
             'amount'                => $validated['amount'],
+            'amount_in_usd'         => $amountInUsd, // <-- حفظنا القيمة بالدولار هنا
             'currency_id'           => $validated['currency_id'],
             'destination_office_id' => $validated['destination_office_id'] ?? null,
             'destination_agent_id'  => $validated['destination_agent_id'] ?? null,
             'receiver_name'         => $validated['receiver_name'],
             'receiver_phone'        => $validated['receiver_phone'],
             'status'                => 'pending',
-            'fee'                   => 0, // الرسوم تبقى 0 (أو null حسب الداتا بيز)
-            'receiver_id_image'     => null, // الصورة تبقى null
+            'fee'                   => 0,
+            'receiver_id_image'     => null,
         ]);
 
         return response()->json([
@@ -58,12 +92,12 @@ class TransferController extends Controller
         $transfer = Transfer::findOrFail($id);
         $user = Auth::user();
 
-        // نلف العملية كلها داخل Transaction لضمان سلامة البيانات المالية
         return DB::transaction(function () use ($request, $transfer, $user) {
 
-            // 1. المعتمد (Agent) يحول من pending إلى approved أو waiting
+            // 1. المعتمد (Agent) يحول من pending إلى approved أو rejected
             if ($user->role === 'agent') {
-                $request->validate(['status' => 'required|in:approved,waiting']);
+                // أضفنا 'rejected' هنا ليتمكن من الرفض
+                $request->validate(['status' => 'required|in:approved,waiting,rejected']);
 
                 // الحالة: الزبون سلم المال للوكيل -> يزيد رصيد صندوق الوكيل
                 if ($request->status === 'approved' && $transfer->status === 'pending') {
@@ -72,7 +106,7 @@ class TransferController extends Controller
                         ->first();
 
                     if (!$agentSafe) throw new \Exception("صندوق الوكيل غير موجود");
-                    $agentSafe->increment('balance', $transfer->amount);
+                    $agentSafe->increment('balance', $transfer->amount_in_usd);
                 }
 
                 $transfer->status = $request->status;
@@ -105,8 +139,8 @@ class TransferController extends Controller
                     if (!$officeSafe) {
                         throw new \Exception("صندوق المكتب رقم ({$transfer->destination_office_id}) غير موجود في النظام.");
                     }
-                    $agentSafe->decrement('balance', $transfer->amount);
-                    $officeSafe->increment('balance', $transfer->amount);
+                    $agentSafe->decrement('balance', $transfer->amount_in_usd);
+                    $officeSafe->increment('balance', $transfer->amount_in_usd);
                 }
 
                 $transfer->status = $request->status;
@@ -127,7 +161,7 @@ class TransferController extends Controller
                         ->first();
 
                     if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
-                    $officeSafe->decrement('balance', $transfer->amount);
+                    $officeSafe->decrement('balance', $transfer->amount_in_usd);
                 }
 
                 // رفع صورة الهوية
