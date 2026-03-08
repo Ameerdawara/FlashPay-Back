@@ -30,7 +30,7 @@ class TransferController extends Controller
         }
 
         // جلب الحوالات مع بيانات المرسل والعملة، وترتيبها من الأحدث للأقدم
-        $transfers = $query->with(['sender', 'currency'])->orderBy('created_at', 'desc')->get();
+        $transfers = $query->with(['sender', 'currency','sendCurrency'])->orderBy('created_at', 'desc')->get();
 
         return response()->json([
             'status' => 'success',
