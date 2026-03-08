@@ -14,6 +14,7 @@ class Transfer extends Model
         'sender_id',
         'amount',
         'currency_id',
+        'send_currency_id',
         'fee',
         'destination_office_id',
         'destination_agent_id',
@@ -33,6 +34,9 @@ class Transfer extends Model
         return $this->belongsTo(Currency::class);
     }
 
+    public function sendCurrency() {
+    return $this->belongsTo(Currency::class, 'send_currency_id');
+}
     public function destinationOffice()
     {
         return $this->belongsTo(Office::class, 'destination_office_id');
