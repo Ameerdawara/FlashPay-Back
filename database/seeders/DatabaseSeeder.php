@@ -34,6 +34,7 @@ class DatabaseSeeder extends Seeder
             'tracking_code' => 'TRX-' . strtoupper(Str::random(8)), // توليد كود عشوائي
             'sender_id' => $admin->id, // استخدمنا الآيدي الخاص بالأدمن الذي أنشأناه للتو
             'amount' => 500.00,
+            'send_currency_id' => 1,
             'currency_id' => 1, // افترضنا أن 1 هو الدولار، تأكد من وجوده بسبب الـ CurrencySeeder
             'fee' => 5.00,
             'destination_office_id' => null, // يمكنك وضع ID مكتب إذا كان لديك مكاتب في الداتا بيز

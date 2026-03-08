@@ -30,7 +30,7 @@ class TransferController extends Controller
         }
 
         // جلب الحوالات مع بيانات المرسل والعملة، وترتيبها من الأحدث للأقدم
-        $transfers = $query->with(['sender', 'currency'])->orderBy('created_at', 'desc')->get();
+        $transfers = $query->with(['sender', 'currency','sendCurrency'])->orderBy('created_at', 'desc')->get();
 
         return response()->json([
             'status' => 'success',
@@ -46,6 +46,7 @@ class TransferController extends Controller
         $validated = $request->validate([
             'amount'                => 'required|numeric|min:1',
             'currency_id'           => 'required|exists:currencies,id',
+            'send_currency_id'           => 'required|exists:currencies,id',
             'destination_office_id' => 'exists:offices,id|required',
             'destination_agent_id'  => 'exists:users,id|required',
             'receiver_name'         => 'required|string|max:255',
@@ -62,7 +63,7 @@ class TransferController extends Controller
         $currency = \App\Models\Currency::findOrFail($validated['currency_id']);
 
         // 2. حساب القيمة بالدولار (المبلغ / سعر الصرف)
-        $amountInUsd = $validated['amount'] / $currency->price;
+        $amountInUsd = $validated['amount'] * $currency->price;
 
         // 3. إنشاء الحوالة
         $transfer = Transfer::create([
@@ -71,6 +72,7 @@ class TransferController extends Controller
             'amount'                => $validated['amount'],
             'amount_in_usd'         => $amountInUsd, // <-- حفظنا القيمة بالدولار هنا
             'currency_id'           => $validated['currency_id'],
+            'send_currency_id'           => $validated['send_currency_id'],
             'destination_office_id' => $validated['destination_office_id'] ?? null,
             'destination_agent_id'  => $validated['destination_agent_id'] ?? null,
             'receiver_name'         => $validated['receiver_name'],
