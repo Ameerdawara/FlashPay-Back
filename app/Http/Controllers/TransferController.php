@@ -63,7 +63,7 @@ class TransferController extends Controller
         $currency = \App\Models\Currency::findOrFail($validated['currency_id']);
 
         // 2. حساب القيمة بالدولار (المبلغ / سعر الصرف)
-        $amountInUsd = $validated['amount'] * $currency->price;
+        $amountInUsd = $validated['amount'] / $currency->price;
 
         // 3. إنشاء الحوالة
         $transfer = Transfer::create([
