@@ -60,7 +60,7 @@ class TransferController extends Controller
 
 
         // 1. جلب العملة لمعرفة سعر صرفها الحالي
-        $currency = \App\Models\Currency::findOrFail($validated['currency_id']);
+        $currency = \App\Models\Currency::findOrFail($validated['send_currency_id']);
 
         // 2. حساب القيمة بالدولار (المبلغ / سعر الصرف)
         $amountInUsd = $validated['amount'] / $currency->price;
