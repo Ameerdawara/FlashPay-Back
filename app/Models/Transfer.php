@@ -18,6 +18,8 @@ class Transfer extends Model
         'fee',
         'destination_office_id',
         'destination_agent_id',
+        'destination_country_id', // أضفناه هنا
+        'destination_city',       // أضفناه هنا
         'receiver_name',
         'receiver_phone',
         'receiver_id_image',
