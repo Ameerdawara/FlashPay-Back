@@ -75,7 +75,7 @@ class AuthController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => 'User created successfully',
-                'data' => $user, 
+                'data' => $user,
                 'access_token' => $token,
             ], 201);
         } catch (\Exception $e) {
@@ -133,7 +133,7 @@ class AuthController extends Controller
    public function getAgents(Request $request)
     {
         $user = $request->user();
-        
+
         $query = User::where('role', 'agent')->select('id', 'name', 'phone');
 
         // فلترة الوكلاء بناءً على مدينة الزبون (إذا كانت دبي، يجلب وكلاء دبي فقط)
@@ -142,7 +142,7 @@ class AuthController extends Controller
         }
 
         $agents = $query->get();
-        
+
         return response()->json([
             'status' => 'success',
             'data' => $agents
