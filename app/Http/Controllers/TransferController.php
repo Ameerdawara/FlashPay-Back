@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use Illuminate\Support\Facades\Log;
 use App\Models\Transfer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -30,7 +30,7 @@ class TransferController extends Controller
         }
 
         // جلب الحوالات مع بيانات المرسل والعملة، وترتيبها من الأحدث للأقدم
-        $transfers = $query->with(['sender', 'currency','sendCurrency'])->orderBy('created_at', 'desc')->get();
+        $transfers = $query->with(['sender', 'currency', 'sendCurrency'])->orderBy('created_at', 'desc')->get();
 
         return response()->json([
             'status' => 'success',
@@ -63,7 +63,7 @@ class TransferController extends Controller
         $currency = \App\Models\Currency::findOrFail($validated['send_currency_id']);
 
         // 2. حساب القيمة بالدولار (المبلغ / سعر الصرف)
-        $amountInUsd = $validated['amount'] / $currency->price;
+        $amountInUsd = $validated['amount'] * $currency->price;
 
         // 3. إنشاء الحوالة
         $transfer = Transfer::create([
@@ -96,53 +96,73 @@ class TransferController extends Controller
 
         return DB::transaction(function () use ($request, $transfer, $user) {
 
-            // 1. المعتمد (Agent) يحول من pending إلى approved أو rejected
             if ($user->role === 'agent') {
-                // أضفنا 'rejected' هنا ليتمكن من الرفض
                 $request->validate(['status' => 'required|in:approved,waiting,rejected']);
 
-                // الحالة: الزبون سلم المال للوكيل -> يزيد رصيد صندوق الوكيل
+                // الحالة 1: الموافقة على طلب جديد (Pending -> Approved)
                 if ($request->status === 'approved' && $transfer->status === 'pending') {
                     $agentSafe = MainSafe::where('owner_id', $user->id)
                         ->where('owner_type', 'App\Models\User')
                         ->first();
-
-                    if (!$agentSafe) throw new \Exception("صندوق الوكيل غير موجود");
+ if (!$agentSafe) throw new \Exception("صندوق الوكيل غير موجود");
                     $agentSafe->increment('balance', $transfer->amount_in_usd);
                 }
 
+                // الحالة 2: الإرسال للمكتب (Approved -> Waiting)
+                // لا نحتاج لتعديل الصناديق هنا لأنها تعدل عند الـ Ready من قبل الأدمن
+                // ولكن يجب التأكد أن الحوالة كانت Approved قبل تحويلها لـ Waiting
+                if ($request->status === 'waiting' && $transfer->status !== 'approved') {
+                    return response()->json(['message' => 'يجب الموافقة على الحوالة أولاً قبل إرسالها'], 400);
+                }
+
+                // هــام جداً: تحديث الحالة وحفظها
                 $transfer->status = $request->status;
             }
 
-            // 2. أدمن أو سوبر أدمن يحول إلى ready
+           // 2. أدمن أو سوبر أدمن يحول إلى ready
             elseif (in_array($user->role, ['admin', 'super_admin'])) {
                 $request->validate([
                     'status' => 'required|in:ready',
                     'fee'    => 'required|numeric|min:0'
                 ]);
 
-                // الحالة: الحوالة أصبحت جاهزة للتسليم في سوريا
-                // نقل المبلغ من عهدة الوكيل إلى عهدة المكتب
+                // الحالة: الحوالة أصبحت جاهزة للتسليم
                 if ($request->status === 'ready' && $transfer->status === 'waiting') {
-                    // خصم من صندوق الوكيل (الذي استلم الحوالة أصلاً)
                     $agentSafe = MainSafe::where('owner_id', $transfer->destination_agent_id)
                         ->where('owner_type', 'App\Models\User')
                         ->first();
 
-                    // زيادة في صندوق المكتب المستلم (الذي سيسلم الكاش)
                     $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
                         ->where('owner_type', 'App\Models\Office')
                         ->first();
 
-                    if (!$agentSafe) {
-                        throw new \Exception("صندوق الوكيل رقم ({$transfer->destination_agent_id}) غير موجود في النظام.");
-                    }
+                    if (!$agentSafe) throw new \Exception("صندوق الوكيل غير موجود");
+                    if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
 
-                    if (!$officeSafe) {
-                        throw new \Exception("صندوق المكتب رقم ({$transfer->destination_office_id}) غير موجود في النظام.");
-                    }
                     $agentSafe->decrement('balance', $transfer->amount_in_usd);
                     $officeSafe->increment('balance', $transfer->amount_in_usd);
+
+                    // ==========================================
+                    // 🚀 كود إرسال رسالة الواتساب يبدأ هنا
+                    // ==========================================
+                    $phone = $transfer->receiver_phone; // أو $request->receive_phone إذا كنت تمرره في الطلب
+                    $amount = $transfer->amount; // المبلغ
+                    $currency = $transfer->currency->code ?? ''; // العملة إذا كانت محملة
+
+                    $whatsappMessage = "مرحباً المستلم الكريم، نعلمك أن حوالتك رقم ({$transfer->tracking_code}) بقيمة $amount $currency أصبحت جاهزة للاستلام الآن من مكتبنا.";
+
+                    try {
+                        // مثال باستخدام Laravel HTTP Client
+                        // يجب استبدال الرابط والتوكن ببيانات مزود خدمة الواتساب الخاص بك
+                        \Illuminate\Support\Facades\Http::post('رابط_الـ_API_الخاص_بمزود_الواتساب', [
+                            'token' => 'YOUR_API_TOKEN', //توكن الادمن
+                            'to'    => $phone,
+                            'body'  => $whatsappMessage
+                        ]);
+                    } catch (\Exception $e) {
+                        \Illuminate\Support\Facades\Log::error('فشل إرسال رسالة واتساب للحوالة ' . $transfer->id . ' السبب: ' . $e->getMessage());
+                    }
+                    // ==========================================
                 }
 
                 $transfer->status = $request->status;
@@ -155,8 +175,7 @@ class TransferController extends Controller
                     'status'            => 'required|in:completed',
                     'receiver_id_image' => 'required|image|mimes:jpeg,png,jpg|max:4096'
                 ]);
-
-                // الحالة: المكتب سلم الكاش فعلياً للمستلم -> خصم من رصيد صندوق المكتب
+ // الحالة: المكتب سلم الكاش فعلياً للمستلم -> خصم من رصيد صندوق المكتب
                 if ($request->status === 'completed' && $transfer->status === 'ready') {
                     $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
                         ->where('owner_type', 'App\Models\Office')
