@@ -90,7 +90,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('offices', OfficeController::class);
     Route::apiResource('countries', CountryController::class)->except(['index']);
     Route::apiResource('cities', CityController::class)->except(['index']);
-
+Route::get('/agent/safe', [MainSafeController::class, 'agentSafe']);
     // مسارات الملف الشخصي وسجل الحوالات
     Route::get('/profile', [ProfileController::class, 'index']);
     Route::put('/profile/update', [ProfileController::class, 'update']);
