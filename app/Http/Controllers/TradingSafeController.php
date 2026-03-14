@@ -99,10 +99,16 @@ class TradingSafeController extends Controller
             }
 
             // حساب الربح المحقق بناءً على متوسط التكلفة
-            $profit = ($validated['sell_price'] - $safe->cost) * $validated['amount'];
+                $costAtTime = $safe->cost; // احفظها أولاً
 
-            $safe->decrement('balance', $validated['amount']);
+             $profit = ($validated['sell_price'] - $costAtTime) * $validated['amount'];
+      
+             $newBalance = $safe->balance - $validated['amount'];
 
+             $safe->update([
+                 'balance' => $newBalance,
+                 'cost'    => $newBalance == 0 ? 0 : $costAtTime,
+             ]);
             TradingTransaction::create([
                 'office_id'   => $validated['office_id'],
                 'currency_id' => $validated['currency_id'],
@@ -110,7 +116,7 @@ class TradingSafeController extends Controller
                 'type'        => 'sell',
                 'amount'      => $validated['amount'],
                 'price'       => $validated['sell_price'],
-                'cost_at_time' => $safe->cost, // التكلفة التي كانت موجودة وقت البيع
+                 'cost_at_time' => $costAtTime,  // بعد - احتفظ بالتكلفة القديمة للسجل
                 'profit'      => $profit,      // تسجيل الربح هنا
                 'transaction_date' => now()->toDateString(),
             ]);
