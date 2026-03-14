@@ -51,6 +51,14 @@ class TransferController extends Controller
             'destination_agent_id'  => 'exists:users,id|required',
             'receiver_name'         => 'required|string|max:255',
             'receiver_phone'        => 'required|string|max:20',
+            // قاعدة الحوالة الداخلية: المكتب إجباري إذا لم يختر المستخدم "دولة"
+            'destination_office_id'  => 'required_without:destination_country_id|nullable|exists:offices,id',
+            
+            // قاعدة الحوالة الدولية: الدولة إجبارية إذا لم يختر المستخدم "مكتب"
+            'destination_country_id' => 'required_without:destination_office_id|nullable|exists:countries,id',
+            
+            // المدينة تصبح إجبارية فقط في حال كانت الحوالة دولية (أي تم اختيار دولة)
+            'destination_city'       => 'required_with:destination_country_id|nullable|string',
         ]);
 
         // 2. توليد كود تتبع عشوائي فريد (مثلاً: TRX-A8F9K2)
@@ -63,7 +71,7 @@ class TransferController extends Controller
         $currency = \App\Models\Currency::findOrFail($validated['send_currency_id']);
 
         // 2. حساب القيمة بالدولار (المبلغ / سعر الصرف)
-        $amountInUsd = $validated['amount'] * $currency->price;
+        $amountInUsd = $validated['amount'] / $currency->price;
 
         // 3. إنشاء الحوالة
         $transfer = Transfer::create([
@@ -75,6 +83,10 @@ class TransferController extends Controller
             'send_currency_id'           => $validated['send_currency_id'],
             'destination_office_id' => $validated['destination_office_id'] ?? null,
             'destination_agent_id'  => $validated['destination_agent_id'] ?? null,
+            // حفظ الحقول التي قد تكون موجودة أو فارغة حسب نوع الحوالة
+            'destination_office_id'  => $validated['destination_office_id'] ?? null,
+            'destination_country_id' => $validated['destination_country_id'] ?? null,
+            'destination_city'       => $validated['destination_city'] ?? null,
             'receiver_name'         => $validated['receiver_name'],
             'receiver_phone'        => $validated['receiver_phone'],
             'status'                => 'pending',
