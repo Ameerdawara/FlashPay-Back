@@ -22,9 +22,20 @@ class AuthController extends Controller
 
             'id_card_image' => 'required_if:role,customer|image|mimes:jpeg,png,jpg|max:2048',
             // التعديل هنا: جعلنا الـ ID مطلوباً فقط إذا لم يتم إرسال الاسم!
-            'country_id' => 'required_without:country_name|exists:countries,id|nullable',
-            'city_id'    => 'required_without:city_name|exists:cities,id|nullable',
-
+            'country_id' => [
+                Rule::requiredIf(function () use ($request) {
+                    return in_array($request->role, ['agent', 'customer']);
+                }),
+                'exists:countries,id',
+                'nullable'
+            ],
+            'city_id' => [
+                Rule::requiredIf(function () use ($request) {
+                    return in_array($request->role, ['agent', 'customer']);
+                }),
+                'exists:cities,id',
+                'nullable'
+            ],
             'balance'    => 'required_if:role,agent|numeric|min:0',
 
             'office_id'  => [
