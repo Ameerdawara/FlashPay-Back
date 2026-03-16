@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             'is_active' => true,
             'role' => 'admin',
             'country_id' => 1,
+            'id_card_image'=>null
         ]);
 
         // 3. إنشاء حوالة تجريبية (Seed)
