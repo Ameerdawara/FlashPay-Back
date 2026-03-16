@@ -102,7 +102,7 @@ class TradingSafeController extends Controller
                 $costAtTime = $safe->cost; // احفظها أولاً
 
              $profit = ($validated['sell_price'] - $costAtTime) * $validated['amount'];
-      
+
              $newBalance = $safe->balance - $validated['amount'];
 
              $safe->update([
