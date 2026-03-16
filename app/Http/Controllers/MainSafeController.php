@@ -8,6 +8,27 @@ use Illuminate\Http\Request;
 
 class MainSafeController extends Controller
 {
+    public function agentSafe(Request $request)
+{
+    $user = $request->user();
+
+    if ($user->role !== 'agent') {
+        return response()->json(['message' => 'غير مصرح'], 403);
+    }
+
+    $safe = $user->mainSafe;
+
+    if (!$safe) {
+        return response()->json(['status' => 'success', 'data' => ['balance' => 0]]);
+    }
+
+    return response()->json([
+        'status' => 'success',
+        'data' => [
+            'balance' => $safe->balance,
+        ]
+    ]);
+}
     public function index()
     {
         $result = [];
@@ -71,7 +92,7 @@ class MainSafeController extends Controller
                 'balance'     => $safe->balance,
                 'cost'        => $safe->cost,
             ];
-        }   
+        }
 
         return response()->json([
             'status' => 'success',

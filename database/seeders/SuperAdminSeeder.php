@@ -23,6 +23,7 @@ class SuperAdminSeeder extends Seeder
             'office_id'  => null,
             'country_id' => null,
             'city_id'    => null,
+            'is_active'=>true
         ]);
     }
 }

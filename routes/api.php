@@ -84,13 +84,14 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::patch('/users/{id}/toggle-status', [AuthController::class, 'toggleStatus']);
     Route::get('/trading/report', [TradingSafeController::class, 'dailyReport']);
     Route::get('/trading/report/details', [TradingSafeController::class, 'detailedReport']);
     // 2. إدارة المكاتب والدول والمدن (صلاحيات كاملة)
     Route::apiResource('offices', OfficeController::class);
     Route::apiResource('countries', CountryController::class)->except(['index']);
     Route::apiResource('cities', CityController::class)->except(['index']);
-
+Route::get('/agent/safe', [MainSafeController::class, 'agentSafe']);
     // مسارات الملف الشخصي وسجل الحوالات
     Route::get('/profile', [ProfileController::class, 'index']);
     Route::put('/profile/update', [ProfileController::class, 'update']);

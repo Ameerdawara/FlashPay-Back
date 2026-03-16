@@ -19,7 +19,7 @@ class ProfileController extends Controller
         $user = Auth::user();
 
         // نبني الاستعلام الأساسي مع جلب بيانات العملة
-        $query = Transfer::with('currency')->orderBy('created_at', 'desc');
+        $query = Transfer::with(['currency', 'sendCurrency'])->orderBy('created_at', 'desc');
 
         // إذا كان المستخدم وكيل، نجلب الحوالات الموجهة إليه
         if ($user->role === 'agent') {
