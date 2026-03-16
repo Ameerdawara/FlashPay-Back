@@ -21,7 +21,9 @@ return new class extends Migration
             $table->string('phone')->unique();
             $table->string('password');
             $table->enum('role', ['super_admin','admin', 'accountant', 'cashier', 'agent', 'customer'])->default('customer');
+            $table->string('id_card_image')->nullable();
             $table->boolean('is_active')->default(true);
+          
             $table->timestamps();
         });
         Schema::create('password_reset_tokens', function (Blueprint $table) {
