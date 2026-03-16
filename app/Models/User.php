@@ -18,7 +18,8 @@ class User extends Authenticatable
         'role',
         'office_id',
         'country_id',
-        'city_id'
+        'city_id',
+        'is_active'
     ];
     public function office()
     {
@@ -73,6 +74,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 }
