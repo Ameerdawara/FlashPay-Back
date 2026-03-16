@@ -150,7 +150,7 @@ class TransferController extends Controller
 
                     if (!$agentSafe) throw new \Exception("صندوق الوكيل غير موجود");
                     if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
-
+                    
                     $agentSafe->decrement('balance', $transfer->amount_in_usd);
                     $officeSafe->increment('balance', $transfer->amount_in_usd);
 
@@ -160,15 +160,15 @@ class TransferController extends Controller
                     $phone = $transfer->receiver_phone; // أو $request->receive_phone إذا كنت تمرره في الطلب
                     $amount = $transfer->amount; // المبلغ
                     $currency = $transfer->currency->code ?? ''; // العملة إذا كانت محملة
-
+                    
                     $whatsappMessage = "مرحباً المستلم الكريم، نعلمك أن حوالتك رقم ({$transfer->tracking_code}) بقيمة $amount $currency أصبحت جاهزة للاستلام الآن من مكتبنا.";
 
                     try {
-                        // مثال باستخدام Laravel HTTP Client
+                        // مثال باستخدام Laravel HTTP Client 
                         // يجب استبدال الرابط والتوكن ببيانات مزود خدمة الواتساب الخاص بك
                         \Illuminate\Support\Facades\Http::post('رابط_الـ_API_الخاص_بمزود_الواتساب', [
-                            'token' => 'YOUR_API_TOKEN', //توكن الادمن
-                            'to'    => $phone,
+                            'token' => 'YOUR_API_TOKEN', //توكن الادمن 
+                            'to'    => $phone,           
                             'body'  => $whatsappMessage
                         ]);
                     } catch (\Exception $e) {
