@@ -53,10 +53,10 @@ class TransferController extends Controller
             'receiver_phone'        => 'required|string|max:20',
             // قاعدة الحوالة الداخلية: المكتب إجباري إذا لم يختر المستخدم "دولة"
             'destination_office_id'  => 'required_without:destination_country_id|nullable|exists:offices,id',
-            
+
             // قاعدة الحوالة الدولية: الدولة إجبارية إذا لم يختر المستخدم "مكتب"
             'destination_country_id' => 'required_without:destination_office_id|nullable|exists:countries,id',
-            
+
             // المدينة تصبح إجبارية فقط في حال كانت الحوالة دولية (أي تم اختيار دولة)
             'destination_city'       => 'required_with:destination_country_id|nullable|string',
         ]);
@@ -71,7 +71,7 @@ class TransferController extends Controller
         $currency = \App\Models\Currency::findOrFail($validated['send_currency_id']);
 
         // 2. حساب القيمة بالدولار (المبلغ / سعر الصرف)
-        $amountInUsd = $validated['amount'] / $currency->price;
+        $amountInUsd = $validated['amount'] * $currency->price;
 
         // 3. إنشاء الحوالة
         $transfer = Transfer::create([
@@ -150,7 +150,7 @@ class TransferController extends Controller
 
                     if (!$agentSafe) throw new \Exception("صندوق الوكيل غير موجود");
                     if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
-
+                    
                     $agentSafe->decrement('balance', $transfer->amount_in_usd);
                     $officeSafe->increment('balance', $transfer->amount_in_usd);
 
@@ -160,15 +160,15 @@ class TransferController extends Controller
                     $phone = $transfer->receiver_phone; // أو $request->receive_phone إذا كنت تمرره في الطلب
                     $amount = $transfer->amount; // المبلغ
                     $currency = $transfer->currency->code ?? ''; // العملة إذا كانت محملة
-
+                    
                     $whatsappMessage = "مرحباً المستلم الكريم، نعلمك أن حوالتك رقم ({$transfer->tracking_code}) بقيمة $amount $currency أصبحت جاهزة للاستلام الآن من مكتبنا.";
 
                     try {
-                        // مثال باستخدام Laravel HTTP Client
+                        // مثال باستخدام Laravel HTTP Client 
                         // يجب استبدال الرابط والتوكن ببيانات مزود خدمة الواتساب الخاص بك
                         \Illuminate\Support\Facades\Http::post('رابط_الـ_API_الخاص_بمزود_الواتساب', [
-                            'token' => 'YOUR_API_TOKEN', //توكن الادمن
-                            'to'    => $phone,
+                            'token' => 'YOUR_API_TOKEN', //توكن الادمن 
+                            'to'    => $phone,           
                             'body'  => $whatsappMessage
                         ]);
                     } catch (\Exception $e) {

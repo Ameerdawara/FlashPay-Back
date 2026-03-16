@@ -84,6 +84,7 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::patch('/users/{id}/toggle-status', [AuthController::class, 'toggleStatus']);
     Route::get('/trading/report', [TradingSafeController::class, 'dailyReport']);
     Route::get('/trading/report/details', [TradingSafeController::class, 'detailedReport']);
     // 2. إدارة المكاتب والدول والمدن (صلاحيات كاملة)

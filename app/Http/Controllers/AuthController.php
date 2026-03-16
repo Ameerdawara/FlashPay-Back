@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\DB;
 
 class AuthController extends Controller
 {
-
     public function register(Request $request)
     {
         $validated = $request->validate([
@@ -21,17 +20,31 @@ class AuthController extends Controller
             'password' => 'required|string|min:8',
             'role'     => ['required', Rule::in(['super_admin', 'admin', 'accountant', 'cashier', 'agent', 'customer'])],
 
-            'country_id' => 'required_if:role,agent|exists:countries,id',
-            'city_id'    => 'required_if:role,agent|exists:cities,id',
+            'id_card_image' => 'required_if:role,customer|image|mimes:jpeg,png,jpg|max:2048',
+            // التعديل هنا: جعلنا الـ ID مطلوباً فقط إذا لم يتم إرسال الاسم!
+            'country_id' => [
+                Rule::requiredIf(function () use ($request) {
+                    return in_array($request->role, ['agent', 'customer']);
+                }),
+                'exists:countries,id',
+                'nullable'
+            ],
+            'city_id' => [
+                Rule::requiredIf(function () use ($request) {
+                    return in_array($request->role, ['agent', 'customer']);
+                }),
+                'exists:cities,id',
+                'nullable'
+            ],
             'balance'    => 'required_if:role,agent|numeric|min:0',
 
             'office_id'  => [
                 Rule::requiredIf(function () use ($request) {
                     return in_array($request->role, ['admin', 'accountant', 'cashier']);
                 }),
-                'exists:offices,id'
+                'exists:offices,id',
+                'nullable'
             ],
-            // استقبال الأسماء من تطبيق فلاتر
             'country_name' => 'nullable|string',
             'city_name'    => 'nullable|string',
         ]);
@@ -40,27 +53,30 @@ class AuthController extends Controller
             $user = DB::transaction(function () use ($request, $validated) {
                 $data = $validated;
                 $data['password'] = Hash::make($request->password);
-
+                // \u2705 رفع صورة الهوية بطريقة واحدة فقط عبر storage
+                unset($data['id_card_image']); // إزالته من $validated لأنه UploadedFile وليس String
+                if ($request->hasFile('id_card_image')) {
+                    $data['id_card_image'] = $request->file('id_card_image')
+                        ->store('id_cards', 'public'); // يحفظ في storage/app/public/id_cards
+                }
                 if ($request->role === 'agent') {
                     $data['office_id'] = null;
                 }
 
-                // حيلة تحويل الأسماء إلى أرقام ID وحفظها للمستخدم
                 if (!empty($data['city_name'])) {
                     $city = \App\Models\City::where('name', $data['city_name'])->first();
                     if ($city) $data['city_id'] = $city->id;
-                    unset($data['city_name']); // إزالتها من المصفوفة حتى لا تسبب خطأ في قاعدة البيانات
+                    unset($data['city_name']);
                 }
+
                 if (!empty($data['country_name'])) {
                     $country = \App\Models\Country::where('name', $data['country_name'])->first();
                     if ($country) $data['country_id'] = $country->id;
                     unset($data['country_name']);
                 }
 
-                // 1. إنشاء المستخدم
-                $user = User::create($data);
+                $user = clone User::create($data); // استخدام clone لضمان كائن نظيف
 
-                // 2. إنشاء الصندوق للوكيل
                 if ($user->role === 'agent') {
                     $user->mainSafe()->create([
                         'balance' => $request->balance ?? 0,
@@ -70,6 +86,8 @@ class AuthController extends Controller
                 return $user;
             });
 
+            // إخبار المحرر بوجود الـ Token لإخفاء الخط الأحمر
+            /** @var \App\Models\User $user */
             $token = $user->createToken('auth_token')->plainTextToken;
 
             return response()->json([
@@ -86,9 +104,6 @@ class AuthController extends Controller
         }
     }
 
-    /**
-     * تسجيل الدخول
-     */
     public function login(Request $request)
     {
         $request->validate([
@@ -96,14 +111,26 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
-        if (!Auth::attempt($request->only('email', 'password'))) {
+        // التعديل الأهم: دمج فحص حالة الحظر (is_active) أثناء تسجيل الدخول
+        if (!Auth::attempt(['email' => $request->email, 'password' => $request->password, 'is_active' => 1])) {
+
+            // التحقق لمعرفة هل الخطأ في الباسورد أم أنه محظور فعلاً؟
+            $userExists = User::where('email', $request->email)->first();
+            if ($userExists && !$userExists->is_active) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'عذراً، هذا الحساب محظور من قبل الإدارة.'
+                ], 403);
+            }
+
             return response()->json([
                 'status' => 'error',
-                'message' => 'Invalid login details'
+                'message' => 'بيانات الدخول خاطئة'
             ], 401);
         }
 
-        $user = User::where('email', $request->email)->firstOrFail();
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
@@ -114,29 +141,28 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * تسجيل الخروج
-     */
     public function logout(Request $request)
     {
-        // حذف التوكن الحالي للمستخدم
-        $request->user()->currentAccessToken()->delete();
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+        $token = $request->user()->currentAccessToken();
+        if ($token) {
+            $token->delete();
+        }
 
         return response()->json([
             'status' => 'success',
             'message' => 'Logged out successfully'
         ]);
     }
-    /**
-     * جلب قائمة الوكلاء
-     */
-   public function getAgents(Request $request)
+
+    public function getAgents(Request $request)
     {
         $user = $request->user();
 
-        $query = User::where('role', 'agent')->select('id', 'name', 'phone');
+        // التعديل هنا: جلب الوكلاء الفعالين فقط (غير المحظورين)
+        $query = User::where('role', 'agent')->where('is_active', 1)->select('id', 'name', 'phone');
 
-        // فلترة الوكلاء بناءً على مدينة الزبون (إذا كانت دبي، يجلب وكلاء دبي فقط)
         if ($user->city_id) {
             $query->where('city_id', $user->city_id);
         }
@@ -147,5 +173,23 @@ class AuthController extends Controller
             'status' => 'success',
             'data' => $agents
         ], 200);
+    }
+
+    public function toggleStatus($id)
+    {
+        // نجلب المستخدم الحالي عن طريق الأيدي لتجنب الخطأ الأحمر
+        $currentAdmin = \App\Models\User::find(Auth::id());
+
+        // نتحقق من الدور
+        if (!$currentAdmin || $currentAdmin->role !== 'super_admin') {
+            return response()->json(['message' => 'غير مصرح لك'], 403);
+        }
+
+        $user = \App\Models\User::findOrFail($id);
+        $user->is_active = !$user->is_active;
+        $user->save();
+
+        $status = $user->is_active ? 'تفعيل' : 'حظر';
+        return response()->json(['message' => "تم $status المستخدم بنجاح"]);
     }
 }

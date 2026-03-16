@@ -25,8 +25,10 @@ class DatabaseSeeder extends Seeder
             'email' => 'admin111@flashpay.com',
             'phone' => '093123456711',
             'password' => bcrypt('password'),
+            'is_active' => true,
             'role' => 'admin',
             'country_id' => 1,
+            'id_card_image'=>null
         ]);
 
         // 3. إنشاء حوالة تجريبية (Seed)
@@ -44,6 +46,5 @@ class DatabaseSeeder extends Seeder
             'receiver_id_image' => null,
             'status' => 'pending' // الحالة الافتراضية
         ]);
-        
     }
 }
