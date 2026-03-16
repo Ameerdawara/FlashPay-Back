@@ -42,13 +42,11 @@ class AuthController extends Controller
             $user = DB::transaction(function () use ($request, $validated) {
                 $data = $validated;
                 $data['password'] = Hash::make($request->password);
+                // \u2705 رفع صورة الهوية بطريقة واحدة فقط عبر storage
+                unset($data['id_card_image']); // إزالته من $validated لأنه UploadedFile وليس String
                 if ($request->hasFile('id_card_image')) {
-                    // إنشاء اسم فريد للصورة
-                    $imageName = time() . '_' . uniqid() . '.' . $request->id_card_image->extension();
-                    // نقل الصورة لمجلد public/uploads/id_cards
-                    $request->id_card_image->move(public_path('uploads/id_cards'), $imageName);
-                    // تخزين المسار في المصفوفة ليتم حفظه في الداتابيز
-                    $data['id_card_image'] = 'uploads/id_cards/' . $imageName;
+                    $data['id_card_image'] = $request->file('id_card_image')
+                        ->store('id_cards', 'public'); // يحفظ في storage/app/public/id_cards
                 }
                 if ($request->role === 'agent') {
                     $data['office_id'] = null;

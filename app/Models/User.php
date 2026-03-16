@@ -19,7 +19,8 @@ class User extends Authenticatable
         'office_id',
         'country_id',
         'city_id',
-        'is_active'
+        'is_active',
+        'id_card_image'
     ];
     public function office()
     {
