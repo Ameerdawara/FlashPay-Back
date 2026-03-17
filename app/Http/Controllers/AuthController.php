@@ -21,61 +21,74 @@ class AuthController extends Controller
             'role'     => ['required', Rule::in(['super_admin', 'admin', 'accountant', 'cashier', 'agent', 'customer'])],
 
             'id_card_image' => 'required_if:role,customer|image|mimes:jpeg,png,jpg|max:2048',
-            // التعديل هنا: جعلنا الـ ID مطلوباً فقط إذا لم يتم إرسال الاسم!
-            'country_id' => [
-                Rule::requiredIf(function () use ($request) {
-                    return in_array($request->role, ['agent', 'customer']);
-                }),
-                'exists:countries,id',
-                'nullable'
-            ],
-            'city_id' => [
-                Rule::requiredIf(function () use ($request) {
-                    return in_array($request->role, ['agent', 'customer']);
-                }),
-                'exists:cities,id',
-                'nullable'
-            ],
-            'balance'    => 'required_if:role,agent|numeric|min:0',
 
-            'office_id'  => [
+            // ✅ الإصلاح: country_id/city_id اختيارية تماماً لأن الـ customer يرسل الأسماء
+            'country_id'   => ['nullable', 'exists:countries,id'],
+            'city_id'      => ['nullable', 'exists:cities,id'],
+
+            // ✅ الإصلاح: نتحقق أن أحد الخيارين (ID أو Name) موجود للـ customer/agent
+            'country_name' => [
+                Rule::requiredIf(function () use ($request) {
+                    return in_array($request->role, ['agent', 'customer'])
+                        && empty($request->country_id);
+                }),
+                'nullable', 'string',
+            ],
+            'city_name' => [
+                Rule::requiredIf(function () use ($request) {
+                    return in_array($request->role, ['agent', 'customer'])
+                        && empty($request->city_id);
+                }),
+                'nullable', 'string',
+            ],
+
+            'balance'   => 'required_if:role,agent|numeric|min:0',
+            'office_id' => [
                 Rule::requiredIf(function () use ($request) {
                     return in_array($request->role, ['admin', 'accountant', 'cashier']);
                 }),
                 'exists:offices,id',
                 'nullable'
             ],
-            'country_name' => 'nullable|string',
-            'city_name'    => 'nullable|string',
         ]);
 
         try {
             $user = DB::transaction(function () use ($request, $validated) {
                 $data = $validated;
                 $data['password'] = Hash::make($request->password);
-                // \u2705 رفع صورة الهوية بطريقة واحدة فقط عبر storage
-                unset($data['id_card_image']); // إزالته من $validated لأنه UploadedFile وليس String
+
+                // ✅ رفع صورة الهوية
+                unset($data['id_card_image']);
                 if ($request->hasFile('id_card_image')) {
                     $data['id_card_image'] = $request->file('id_card_image')
-                        ->store('id_cards', 'public'); // يحفظ في storage/app/public/id_cards
+                        ->store('id_cards', 'public');
                 }
+
                 if ($request->role === 'agent') {
                     $data['office_id'] = null;
                 }
 
+                // ✅ تحويل city_name → city_id
                 if (!empty($data['city_name'])) {
                     $city = \App\Models\City::where('name', $data['city_name'])->first();
-                    if ($city) $data['city_id'] = $city->id;
+                    if (!$city) {
+                        throw new \Exception('المدينة غير موجودة: ' . $data['city_name']);
+                    }
+                    $data['city_id'] = $city->id;
                     unset($data['city_name']);
                 }
 
+                // ✅ تحويل country_name → country_id
                 if (!empty($data['country_name'])) {
                     $country = \App\Models\Country::where('name', $data['country_name'])->first();
-                    if ($country) $data['country_id'] = $country->id;
+                    if (!$country) {
+                        throw new \Exception('الدولة غير موجودة: ' . $data['country_name']);
+                    }
+                    $data['country_id'] = $country->id;
                     unset($data['country_name']);
                 }
 
-                $user = clone User::create($data); // استخدام clone لضمان كائن نظيف
+                $user = User::create($data);
 
                 if ($user->role === 'agent') {
                     $user->mainSafe()->create([
@@ -86,19 +99,19 @@ class AuthController extends Controller
                 return $user;
             });
 
-            // إخبار المحرر بوجود الـ Token لإخفاء الخط الأحمر
             /** @var \App\Models\User $user */
             $token = $user->createToken('auth_token')->plainTextToken;
 
             return response()->json([
-                'status' => 'success',
-                'message' => 'User created successfully',
-                'data' => $user,
+                'status'       => 'success',
+                'message'      => 'User created successfully',
+                'data'         => $user,
                 'access_token' => $token,
             ], 201);
+
         } catch (\Exception $e) {
             return response()->json([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => 'Registration failed: ' . $e->getMessage()
             ], 500);
         }
@@ -107,85 +120,75 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email' => 'required|email',
+            'email'    => 'required|email',
             'password' => 'required',
         ]);
 
-        // التعديل الأهم: دمج فحص حالة الحظر (is_active) أثناء تسجيل الدخول
         if (!Auth::attempt(['email' => $request->email, 'password' => $request->password, 'is_active' => 1])) {
-
-            // التحقق لمعرفة هل الخطأ في الباسورد أم أنه محظور فعلاً؟
             $userExists = User::where('email', $request->email)->first();
             if ($userExists && !$userExists->is_active) {
                 return response()->json([
-                    'status' => 'error',
+                    'status'  => 'error',
                     'message' => 'عذراً، هذا الحساب محظور من قبل الإدارة.'
                 ], 403);
             }
 
             return response()->json([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => 'بيانات الدخول خاطئة'
             ], 401);
         }
 
         /** @var \App\Models\User $user */
-        $user = Auth::user();
+        $user  = Auth::user();
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'status' => 'success',
+            'status'       => 'success',
             'access_token' => $token,
-            'token_type' => 'Bearer',
-            'user' => $user
+            'token_type'   => 'Bearer',
+            'user'         => $user
         ]);
     }
 
     public function logout(Request $request)
     {
         /** @var \App\Models\User $user */
-        $user = $request->user();
         $token = $request->user()->currentAccessToken();
         if ($token) {
             $token->delete();
         }
 
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'Logged out successfully'
         ]);
     }
 
     public function getAgents(Request $request)
     {
-        $user = $request->user();
-
-        // التعديل هنا: جلب الوكلاء الفعالين فقط (غير المحظورين)
+        $user  = $request->user();
         $query = User::where('role', 'agent')->where('is_active', 1)->select('id', 'name', 'phone');
 
         if ($user->city_id) {
             $query->where('city_id', $user->city_id);
         }
 
-        $agents = $query->get();
-
         return response()->json([
             'status' => 'success',
-            'data' => $agents
+            'data'   => $query->get()
         ], 200);
     }
 
     public function toggleStatus($id)
     {
-        // نجلب المستخدم الحالي عن طريق الأيدي لتجنب الخطأ الأحمر
         $currentAdmin = \App\Models\User::find(Auth::id());
 
-        // نتحقق من الدور
         if (!$currentAdmin || $currentAdmin->role !== 'super_admin') {
             return response()->json(['message' => 'غير مصرح لك'], 403);
         }
 
-        $user = \App\Models\User::findOrFail($id);
+        $user            = \App\Models\User::findOrFail($id);
         $user->is_active = !$user->is_active;
         $user->save();
 
