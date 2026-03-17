@@ -26,7 +26,6 @@ class AuthController extends Controller
             'city_id'    => 'required_without:city_name|exists:cities,id|nullable',
 
             'balance'    => 'required_if:role,agent|numeric|min:0',
-
             'office_id'  => [
                 Rule::requiredIf(function () use ($request) {
                     return in_array($request->role, ['admin', 'accountant', 'cashier']);
