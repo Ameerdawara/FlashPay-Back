@@ -1,6 +1,7 @@
 <?php
 use App\Http\Controllers\MainSafeController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\CountryController;
@@ -118,4 +119,7 @@ Route::get('/main-safes', [MainSafeController::class, 'index']);
     // الرسائل
     Route::post('/messages/send', [MessageController::class, 'sendMessage']);
     Route::patch('/conversations/{id}/read', [MessageController::class, 'markAsRead']);
+
+    Route::get('/transfers/{id}/messages', [ChatController::class, 'getMessages']);
+    Route::post('/transfers/{id}/messages', [ChatController::class, 'sendMessage']);
 });
