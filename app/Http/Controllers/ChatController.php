@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\MessageSent;
 use App\Models\Message;
 use App\Models\Transfer;
 use Illuminate\Http\Request;
@@ -96,9 +97,9 @@ class ChatController extends Controller
             DB::commit();
 
             // سيتم تفعيل إرسال الحدث (Event) لاحقاً للـ Real-time
-            // foreach ($newMessages as $msg) {
-            //     broadcast(new MessageSent($msg))->toOthers();
-            // }
+            foreach ($newMessages as $msg) {
+                broadcast(new MessageSent($msg))->toOthers();
+            }
 
             return response()->json([
                 'status'  => 'success',
