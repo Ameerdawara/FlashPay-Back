@@ -36,9 +36,10 @@ class Transfer extends Model
         return $this->belongsTo(Currency::class);
     }
 
-    public function sendCurrency() {
-    return $this->belongsTo(Currency::class, 'send_currency_id');
-}
+    public function sendCurrency()
+    {
+        return $this->belongsTo(Currency::class, 'send_currency_id');
+    }
     public function destinationOffice()
     {
         return $this->belongsTo(Office::class, 'destination_office_id');
@@ -47,5 +48,9 @@ class Transfer extends Model
     public function conversation()
     {
         return $this->hasOne(Conversation::class);
+    }
+    public function histories()
+    {
+        return $this->hasMany(TransferHistory::class);
     }
 }
