@@ -41,13 +41,12 @@ class TransferController extends Controller
     {
         // 1. التحقق من صحة البيانات
         $validated = $request->validate([
-            'amount'                => 'required|numeric|min:1',
-            'currency_id'           => 'required|exists:currencies,id',
-            'send_currency_id'           => 'required|exists:currencies,id',
-            'destination_office_id' => 'exists:offices,id|required',
-            'destination_agent_id'  => 'exists:users,id|required',
-            'receiver_name'         => 'required|string|max:255',
-            'receiver_phone'        => 'required|string|max:20',
+            'amount'           => 'required|numeric|min:1',
+            'currency_id'      => 'required|exists:currencies,id',
+            'send_currency_id' => 'required|exists:currencies,id',
+            'receiver_name'    => 'required|string|max:255',
+            'receiver_phone'   => 'required|string|max:20',
+
             // قاعدة الحوالة الداخلية: المكتب إجباري إذا لم يختر المستخدم "دولة"
             'destination_office_id'  => 'required_without:destination_country_id|nullable|exists:offices,id',
 
@@ -72,23 +71,20 @@ class TransferController extends Controller
 
         // 3. إنشاء الحوالة
         $transfer = Transfer::create([
-            'tracking_code'         => $trackingCode,
-            'sender_id'             => Auth::id(),
-            'amount'                => $validated['amount'],
-            'amount_in_usd'         => $amountInUsd, // <-- حفظنا القيمة بالدولار هنا
-            'currency_id'           => $validated['currency_id'],
-            'send_currency_id'           => $validated['send_currency_id'],
-            'destination_office_id' => $validated['destination_office_id'] ?? null,
-            'destination_agent_id'  => $validated['destination_agent_id'] ?? null,
-            // حفظ الحقول التي قد تكون موجودة أو فارغة حسب نوع الحوالة
+            'tracking_code'          => $trackingCode,
+            'sender_id'              => Auth::id(),
+            'amount'                 => $validated['amount'],
+            'amount_in_usd'          => $amountInUsd,
+            'currency_id'            => $validated['currency_id'],
+            'send_currency_id'       => $validated['send_currency_id'],
             'destination_office_id'  => $validated['destination_office_id'] ?? null,
             'destination_country_id' => $validated['destination_country_id'] ?? null,
             'destination_city'       => $validated['destination_city'] ?? null,
-            'receiver_name'         => $validated['receiver_name'],
-            'receiver_phone'        => $validated['receiver_phone'],
-            'status'                => 'pending',
-            'fee'                   => 0,
-            'receiver_id_image'     => null,
+            'receiver_name'          => $validated['receiver_name'],
+            'receiver_phone'         => $validated['receiver_phone'],
+            'status'                 => 'waiting',
+            'fee'                    => 0,
+            'receiver_id_image'      => null,
         ]);
 
         return response()->json([
@@ -137,18 +133,12 @@ class TransferController extends Controller
 
                 // الحالة: الحوالة أصبحت جاهزة للتسليم
                 if ($request->status === 'ready' && $transfer->status === 'waiting') {
-                    $agentSafe = MainSafe::where('owner_id', $transfer->destination_agent_id)
-                        ->where('owner_type', 'App\Models\User')
-                        ->first();
-
                     $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
                         ->where('owner_type', 'App\Models\Office')
                         ->first();
 
-                    if (!$agentSafe) throw new \Exception("صندوق الوكيل غير موجود");
                     if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
-                    
-                    $agentSafe->decrement('balance', $transfer->amount_in_usd);
+
                     $officeSafe->increment('balance', $transfer->amount_in_usd);
 
                     // ==========================================
@@ -157,15 +147,15 @@ class TransferController extends Controller
                     $phone = $transfer->receiver_phone; // أو $request->receive_phone إذا كنت تمرره في الطلب
                     $amount = $transfer->amount; // المبلغ
                     $currency = $transfer->currency->code ?? ''; // العملة إذا كانت محملة
-                    
+
                     $whatsappMessage = "مرحباً المستلم الكريم، نعلمك أن حوالتك رقم ({$transfer->tracking_code}) بقيمة $amount $currency أصبحت جاهزة للاستلام الآن من مكتبنا.";
 
                     try {
-                        // مثال باستخدام Laravel HTTP Client 
+                        // مثال باستخدام Laravel HTTP Client
                         // يجب استبدال الرابط والتوكن ببيانات مزود خدمة الواتساب الخاص بك
                         \Illuminate\Support\Facades\Http::post('رابط_الـ_API_الخاص_بمزود_الواتساب', [
-                            'token' => 'YOUR_API_TOKEN', //توكن الادمن 
-                            'to'    => $phone,           
+                            'token' => 'YOUR_API_TOKEN', //توكن الادمن
+                            'to'    => $phone,
                             'body'  => $whatsappMessage
                         ]);
                     } catch (\Exception $e) {
