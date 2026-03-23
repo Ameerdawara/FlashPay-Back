@@ -1,14 +1,11 @@
 <?php
 
 namespace App\Http\Controllers;
-use Illuminate\Support\Facades\Log;
 use App\Models\Transfer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use App\Models\MainSafe;
-use App\Models\User;
-use App\Models\Office;
 use Illuminate\Support\Facades\DB;
 
 class TransferController extends Controller
