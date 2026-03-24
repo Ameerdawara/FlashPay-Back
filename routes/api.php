@@ -107,6 +107,13 @@ Route::get('/main-safes', [MainSafeController::class, 'index']);
     Route::get('/transfers', [TransferController::class, 'index']);
     Route::post('/transfers', [TransferController::class, 'store']);
     Route::patch('/transfers/{id}/update-status', [TransferController::class, 'update']);
+    Route::put('/transfers/{id}/edit', [TransferController::class, 'editTransfer']);
+    // ملاحظة: مسار history/all يجب أن يكون قبل {id}/history تجنباً للتعارض
+    Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
+    Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
+    Route::put('/transfers/{id}/edit', [TransferController::class, 'editTransfer']);
+    Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
+    Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
 
     Route::prefix('trading')->group(function () {
         Route::post('/buy', [TradingSafeController::class, 'buy']);

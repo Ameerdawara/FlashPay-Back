@@ -1,16 +1,20 @@
 <?php
 
 namespace App\Http\Controllers;
+
 use App\Models\Transfer;
+use App\Models\MainSafe;
+use App\Models\Currency;
+use App\Models\TransferHistory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
-use App\Models\MainSafe;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class TransferController extends Controller
 {
-
     public function index(Request $request)
     {
         $user = Auth::user();
@@ -27,49 +31,37 @@ class TransferController extends Controller
         }
 
         // جلب الحوالات مع بيانات المرسل والعملة، وترتيبها من الأحدث للأقدم
-        $transfers = $query->with(['sender', 'currency', 'sendCurrency'])->orderBy('created_at', 'desc')->get();
+        $transfers = $query->with(['sender', 'currency', 'sendCurrency'])
+                           ->orderBy('created_at', 'desc')
+                           ->get();
 
         return response()->json([
             'status' => 'success',
             'data' => $transfers
         ], 200);
     }
+
     /**
      * إنشاء حوالة جديدة (مخصصة للمستخدم/الزبون)
      */
     public function store(Request $request)
     {
-        // 1. التحقق من صحة البيانات
         $validated = $request->validate([
-            'amount'           => 'required|numeric|min:1',
-            'currency_id'      => 'required|exists:currencies,id',
-            'send_currency_id' => 'required|exists:currencies,id',
-            'receiver_name'    => 'required|string|max:255',
-            'receiver_phone'   => 'required|string|max:20',
-
-            // قاعدة الحوالة الداخلية: المكتب إجباري إذا لم يختر المستخدم "دولة"
+            'amount'                 => 'required|numeric|min:1',
+            'currency_id'            => 'required|exists:currencies,id',
+            'send_currency_id'       => 'required|exists:currencies,id',
+            'receiver_name'          => 'required|string|max:255',
+            'receiver_phone'         => 'required|string|max:20',
             'destination_office_id'  => 'required_without:destination_country_id|nullable|exists:offices,id',
-
-            // قاعدة الحوالة الدولية: الدولة إجبارية إذا لم يختر المستخدم "مكتب"
             'destination_country_id' => 'required_without:destination_office_id|nullable|exists:countries,id',
-
-            // المدينة تصبح إجبارية فقط في حال كانت الحوالة دولية (أي تم اختيار دولة)
             'destination_city'       => 'required_with:destination_country_id|nullable|string',
         ]);
 
-        // 2. توليد كود تتبع عشوائي فريد (مثلاً: TRX-A8F9K2)
         $trackingCode = 'TRX-' . strtoupper(Str::random(8));
 
-        // 3. إنشاء الحوالة
-
-
-        // 1. جلب العملة لمعرفة سعر صرفها الحالي
-        $currency = \App\Models\Currency::findOrFail($validated['send_currency_id']);
-
-        // 2. حساب القيمة بالدولار (المبلغ / سعر الصرف)
+        $currency = Currency::findOrFail($validated['send_currency_id']);
         $amountInUsd = $validated['amount'] * $currency->price;
 
-        // 3. إنشاء الحوالة
         $transfer = Transfer::create([
             'tracking_code'          => $trackingCode,
             'sender_id'              => Auth::id(),
@@ -94,87 +86,147 @@ class TransferController extends Controller
         ], 201);
     }
 
+    /**
+     * تعديل بيانات الحوالة (admin فقط)
+     * ملاحظة: تسجيل السجل (History) يتم تلقائياً عبر TransferObserver
+     */
+    public function editTransfer(Request $request, $id)
+    {
+        $transfer = Transfer::findOrFail($id);
+        $user = Auth::user();
+
+        if (!in_array($user->role, ['admin', 'super_admin'])) {
+            return response()->json(['message' => 'غير مصرح لك بتعديل الحوالة'], 403);
+        }
+
+        $validated = $request->validate([
+            'receiver_name'  => 'sometimes|string|max:255',
+            'receiver_phone' => 'sometimes|string|max:20',
+            'amount'         => 'sometimes|numeric|min:1',
+            'fee'            => 'sometimes|numeric|min:0',
+            // الملاحظات لا تحفظ في جدول الحوالات مباشرة، يمكن استخدامها لاحقاً
+            'notes'          => 'sometimes|nullable|string|max:500',
+        ]);
+
+        // تصفية الحقول لتجنب أخطاء قاعدة البيانات (استبعاد notes)
+        $updateFields = array_filter($validated, fn($k) => $k !== 'notes', ARRAY_FILTER_USE_KEY);
+
+        // إعادة حساب amount_in_usd إذا تغيّر المبلغ
+        if (isset($updateFields['amount'])) {
+            $currency = Currency::find($transfer->send_currency_id);
+            if ($currency) {
+                $updateFields['amount_in_usd'] = $updateFields['amount'] * $currency->price;
+            }
+        }
+
+        // التحديث فقط (الـ TransferObserver سيتكفل بإنشاء الـ TransferHistory)
+        $transfer->update($updateFields);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'تم تعديل الحوالة بنجاح',
+            'data'    => $transfer->load(['sender', 'currency', 'sendCurrency'])
+        ]);
+    }
+
+    /**
+     * جلب سجل التعديلات لحوالة محددة أو كل السجلات
+     */
+    public function transferHistory(Request $request, $id = null)
+    {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'super_admin'])) {
+            return response()->json(['message' => 'غير مصرح لك بعرض سجل التعديلات'], 403);
+        }
+
+        $query = TransferHistory::with(['transfer', 'admin'])->orderBy('created_at', 'desc');
+
+        if ($id) {
+            $query->where('transfer_id', $id);
+        } else {
+            $query->take(200);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data'   => $query->get()
+        ]);
+    }
+
     public function update(Request $request, $id)
     {
         $transfer = Transfer::findOrFail($id);
         $user = Auth::user();
 
+        // 1. إجراء الـ Validation خارج الـ Transaction لضمان الأداء الأفضل
+        if ($user->role === 'agent') {
+            $request->validate(['status' => 'required|in:approved,waiting,rejected']);
+        } elseif (in_array($user->role, ['admin', 'super_admin'])) {
+            $request->validate([
+                'status' => 'required|in:ready',
+                'fee'    => 'required|numeric|min:0'
+            ]);
+        } elseif (in_array($user->role, ['cashier', 'accountant'])) {
+            $request->validate([
+                'status'            => 'required|in:completed',
+                'receiver_id_image' => 'required|image|mimes:jpeg,png,jpg|max:4096'
+            ]);
+        } else {
+            return response()->json(['message' => 'ليس لديك صلاحية'], 403);
+        }
+
+        // 2. البدء بالـ Transaction بعد التأكد من صحة البيانات
         return DB::transaction(function () use ($request, $transfer, $user) {
 
             if ($user->role === 'agent') {
-                $request->validate(['status' => 'required|in:approved,waiting,rejected']);
-
-                // الحالة 1: الموافقة على طلب جديد (Pending -> Approved)
                 if ($request->status === 'approved' && $transfer->status === 'pending') {
                     $agentSafe = MainSafe::where('owner_id', $user->id)
                         ->where('owner_type', 'App\Models\User')
                         ->first();
- if (!$agentSafe) throw new \Exception("صندوق الوكيل غير موجود");
+
+                    if (!$agentSafe) throw new \Exception("صندوق الوكيل غير موجود");
                     $agentSafe->increment('balance', $transfer->amount_in_usd);
                 }
 
-                // الحالة 2: الإرسال للمكتب (Approved -> Waiting)
-                // لا نحتاج لتعديل الصناديق هنا لأنها تعدل عند الـ Ready من قبل الأدمن
-                // ولكن يجب التأكد أن الحوالة كانت Approved قبل تحويلها لـ Waiting
                 if ($request->status === 'waiting' && $transfer->status !== 'approved') {
                     return response()->json(['message' => 'يجب الموافقة على الحوالة أولاً قبل إرسالها'], 400);
                 }
 
-                // هــام جداً: تحديث الحالة وحفظها
                 $transfer->status = $request->status;
             }
 
-           // 2. أدمن أو سوبر أدمن يحول إلى ready
             elseif (in_array($user->role, ['admin', 'super_admin'])) {
-                $request->validate([
-                    'status' => 'required|in:ready',
-                    'fee'    => 'required|numeric|min:0'
-                ]);
-
-                // الحالة: الحوالة أصبحت جاهزة للتسليم
                 if ($request->status === 'ready' && $transfer->status === 'waiting') {
                     $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
                         ->where('owner_type', 'App\Models\Office')
                         ->first();
 
                     if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
-
                     $officeSafe->increment('balance', $transfer->amount_in_usd);
 
-                    // ==========================================
-                    // 🚀 كود إرسال رسالة الواتساب يبدأ هنا
-                    // ==========================================
-                    $phone = $transfer->receiver_phone; // أو $request->receive_phone إذا كنت تمرره في الطلب
-                    $amount = $transfer->amount; // المبلغ
-                    $currency = $transfer->currency->code ?? ''; // العملة إذا كانت محملة
+                    // إرسال رسالة الواتساب
+                    $phone = $transfer->receiver_phone;
+                    $amount = $transfer->amount;
+                    $currency = $transfer->currency->code ?? '';
 
                     $whatsappMessage = "مرحباً المستلم الكريم، نعلمك أن حوالتك رقم ({$transfer->tracking_code}) بقيمة $amount $currency أصبحت جاهزة للاستلام الآن من مكتبنا.";
 
                     try {
-                        // مثال باستخدام Laravel HTTP Client
-                        // يجب استبدال الرابط والتوكن ببيانات مزود خدمة الواتساب الخاص بك
-                        \Illuminate\Support\Facades\Http::post('رابط_الـ_API_الخاص_بمزود_الواتساب', [
-                            'token' => 'YOUR_API_TOKEN', //توكن الادمن
+                        Http::post('رابط_الـ_API_الخاص_بمزود_الواتساب', [
+                            'token' => 'YOUR_API_TOKEN',
                             'to'    => $phone,
                             'body'  => $whatsappMessage
                         ]);
                     } catch (\Exception $e) {
-                        \Illuminate\Support\Facades\Log::error('فشل إرسال رسالة واتساب للحوالة ' . $transfer->id . ' السبب: ' . $e->getMessage());
+                        Log::error('فشل إرسال رسالة واتساب للحوالة ' . $transfer->id . ' السبب: ' . $e->getMessage());
                     }
-                    // ==========================================
                 }
 
                 $transfer->status = $request->status;
                 $transfer->fee = $request->fee;
             }
 
-            // 3. كاشير أو محاسب يحول إلى completed
             elseif (in_array($user->role, ['cashier', 'accountant'])) {
-                $request->validate([
-                    'status'            => 'required|in:completed',
-                    'receiver_id_image' => 'required|image|mimes:jpeg,png,jpg|max:4096'
-                ]);
- // الحالة: المكتب سلم الكاش فعلياً للمستلم -> خصم من رصيد صندوق المكتب
                 if ($request->status === 'completed' && $transfer->status === 'ready') {
                     $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
                         ->where('owner_type', 'App\Models\Office')
@@ -184,15 +236,12 @@ class TransferController extends Controller
                     $officeSafe->decrement('balance', $transfer->amount_in_usd);
                 }
 
-                // رفع صورة الهوية
                 if ($request->hasFile('receiver_id_image')) {
                     $path = $request->file('receiver_id_image')->store('receipts', 'public');
                     $transfer->receiver_id_image = $path;
                 }
 
                 $transfer->status = $request->status;
-            } else {
-                return response()->json(['message' => 'ليس لديك صلاحية'], 403);
             }
 
             $transfer->save();
@@ -200,7 +249,7 @@ class TransferController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => 'تم تحديث الحوالة وتعديل الصناديق بنجاح',
-                'data' => $transfer->load(['sender', 'currency']) // تحميل علاقات إضافية إذا رغبت
+                'data' => $transfer->load(['sender', 'currency'])
             ], 200);
         });
     }
