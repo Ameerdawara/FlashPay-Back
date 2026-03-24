@@ -50,8 +50,12 @@ class ChatController extends Controller
     public function sendMessage(Request $request, $transferId)
     {
         $request->validate([
-            'message' => 'required|string',
+            'message' => 'nullable|string',
+            'image'   => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
         ]);
+        if (!$request->message && !$request->hasFile('image')) {
+            return response()->json(['message' => 'يجب إرسال نص أو صورة'], 422);
+        }
 
         $user = Auth::user();
         $transfer = Transfer::findOrFail($transferId);
@@ -67,6 +71,11 @@ class ChatController extends Controller
 
         try {
             DB::beginTransaction();
+            // ✅ رفع الصورة إذا وجدت
+            $imagePath = null;
+            if ($request->hasFile('image')) {
+                $imagePath = $request->file('image')->store('chat_images', 'public');
+            }
 
             // 1. حفظ رسالة المستخدم
             $message = Message::create([
@@ -74,6 +83,7 @@ class ChatController extends Controller
                 'sender_id'   => $user->id,
                 'receiver_id' => $receiverId,
                 'message'     => $request->message,
+                'image'       => $imagePath,
             ]);
 
             // التحضير لإرجاع قائمة بالرسائل الجديدة

@@ -13,9 +13,17 @@ class Message extends Model
         'transfer_id',
         'sender_id',
         'receiver_id',
+        'image',
         'message',
         'is_read',
     ];
+    public function getImageAttribute($value)
+    {
+        if ($value) {
+            return asset('storage/' . $value); 
+        }
+        return null;
+    }
 
     // علاقة الرسالة بالحوالة
     public function transfer()
