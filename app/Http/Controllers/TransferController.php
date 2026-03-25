@@ -15,22 +15,20 @@ use Illuminate\Support\Facades\Log;
 
 class TransferController extends Controller
 {
-    public function index(Request $request)
+   public function index(Request $request)
     {
         $user = Auth::user();
         $query = Transfer::query();
 
-        // 1. أمان: إذا كان المستخدم وكيل، اجلب الحوالات الموجهة له فقط
-        if ($user->role === 'agent') {
-            $query->where('destination_agent_id', $user->id);
-        }
+        // (اختياري) إذا كان الموظف كاشير أو محاسب، يجلب حوالات مكتبه فقط
+        // if (in_array($user->role, ['cashier', 'accountant'])) {
+        //     $query->where('destination_office_id', $user->office_id);
+        // }
 
-        // الفلترة حسب الحالة الممررة في الرابط (?status=pending)
         if ($request->has('status')) {
             $query->where('status', $request->status);
         }
 
-        // جلب الحوالات مع بيانات المرسل والعملة، وترتيبها من الأحدث للأقدم
         $transfers = $query->with(['sender', 'currency', 'sendCurrency'])
                            ->orderBy('created_at', 'desc')
                            ->get();
@@ -158,10 +156,8 @@ class TransferController extends Controller
         $transfer = Transfer::findOrFail($id);
         $user = Auth::user();
 
-        // 1. إجراء الـ Validation خارج الـ Transaction لضمان الأداء الأفضل
-        if ($user->role === 'agent') {
-            $request->validate(['status' => 'required|in:approved,waiting,rejected']);
-        } elseif (in_array($user->role, ['admin', 'super_admin'])) {
+        // 1. التحقق من الصلاحيات والبيانات المرسلة حسب دور الموظف
+        if (in_array($user->role, ['admin', 'super_admin'])) {
             $request->validate([
                 'status' => 'required|in:ready',
                 'fee'    => 'required|numeric|min:0'
@@ -172,30 +168,14 @@ class TransferController extends Controller
                 'receiver_id_image' => 'required|image|mimes:jpeg,png,jpg|max:4096'
             ]);
         } else {
-            return response()->json(['message' => 'ليس لديك صلاحية'], 403);
+            return response()->json(['message' => 'ليس لديك صلاحية لتحديث الحوالة'], 403);
         }
 
-        // 2. البدء بالـ Transaction بعد التأكد من صحة البيانات
+        // 2. تطبيق التعديلات داخل Transaction
         return DB::transaction(function () use ($request, $transfer, $user) {
 
-            if ($user->role === 'agent') {
-                if ($request->status === 'approved' && $transfer->status === 'pending') {
-                    $agentSafe = MainSafe::where('owner_id', $user->id)
-                        ->where('owner_type', 'App\Models\User')
-                        ->first();
-
-                    if (!$agentSafe) throw new \Exception("صندوق الوكيل غير موجود");
-                    $agentSafe->increment('balance', $transfer->amount_in_usd);
-                }
-
-                if ($request->status === 'waiting' && $transfer->status !== 'approved') {
-                    return response()->json(['message' => 'يجب الموافقة على الحوالة أولاً قبل إرسالها'], 400);
-                }
-
-                $transfer->status = $request->status;
-            }
-
-            elseif (in_array($user->role, ['admin', 'super_admin'])) {
+            // الإدمن يوافق على الحوالة الواردة ويجهزها للاستلام
+            if (in_array($user->role, ['admin', 'super_admin'])) {
                 if ($request->status === 'ready' && $transfer->status === 'waiting') {
                     $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
                         ->where('owner_type', 'App\Models\Office')
@@ -208,7 +188,6 @@ class TransferController extends Controller
                     $phone = $transfer->receiver_phone;
                     $amount = $transfer->amount;
                     $currency = $transfer->currency->code ?? '';
-
                     $whatsappMessage = "مرحباً المستلم الكريم، نعلمك أن حوالتك رقم ({$transfer->tracking_code}) بقيمة $amount $currency أصبحت جاهزة للاستلام الآن من مكتبنا.";
 
                     try {
@@ -226,6 +205,7 @@ class TransferController extends Controller
                 $transfer->fee = $request->fee;
             }
 
+            // الكاشير يسلم المبلغ وينهي الحوالة
             elseif (in_array($user->role, ['cashier', 'accountant'])) {
                 if ($request->status === 'completed' && $transfer->status === 'ready') {
                     $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)

@@ -5,48 +5,44 @@ namespace App\Http\Controllers;
 use App\Events\MessageSent;
 use App\Models\Message;
 use App\Models\Transfer;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-// لا تنسَ استيراد الـ Event لاحقاً عندما نصل لمرحلة الـ WebSockets
-// use App\Events\MessageSent; 
 
 class ChatController extends Controller
 {
-    /**
-     * جلب جميع رسائل محادثة معينة مرتبطة بحوالة
-     */
     public function getMessages($transferId)
     {
         $user = Auth::user();
         $transfer = Transfer::findOrFail($transferId);
 
-        // التحقق من الصلاحيات: هل المستخدم هو مرسل الحوالة أم وكيل الاستلام؟
-        if ($transfer->sender_id !== $user->id && $transfer->destination_agent_id !== $user->id) {
+        // الصلاحية: المرسل (الزبون) أو أي موظف في المكتب
+        $isStaff = in_array($user->role, ['admin']);
+
+        if ($transfer->sender_id !== $user->id && !$isStaff) {
             return response()->json(['message' => 'غير مصرح لك بمشاهدة هذه المحادثة'], 403);
         }
 
-        // جلب الرسائل مرتبة من الأقدم للأحدث
         $messages = Message::where('transfer_id', $transferId)
-            ->with('sender:id,name') // جلب اسم المرسل مع كل رسالة
+            ->with('sender:id,name')
             ->orderBy('created_at', 'asc')
             ->get();
 
-        // (اختياري) تحديد الرسائل كمقروءة إذا كان المستخدم الحالي هو المستقبل
-        Message::where('transfer_id', $transferId)
-            ->where('receiver_id', $user->id)
-            ->where('is_read', false)
-            ->update(['is_read' => true]);
+        // تحديد الرسائل كمقروءة حسب الطرف الذي يفتح المحادثة
+        if (!$isStaff) {
+            // الزبون يقرأ رسائل الموظفين
+            Message::where('transfer_id', $transferId)->where('receiver_id', $user->id)
+                ->where('is_read', false)->update(['is_read' => true]);
+        } else {
+            // الموظفون يقرؤون رسائل الزبون
+            Message::where('transfer_id', $transferId)->where('sender_id', $transfer->sender_id)
+                ->where('is_read', false)->update(['is_read' => true]);
+        }
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $messages
-        ], 200);
+        return response()->json(['status' => 'success', 'data' => $messages], 200);
     }
 
-    /**
-     * إرسال رسالة جديدة (مع ميزة الرد التلقائي)
-     */
     public function sendMessage(Request $request, $transferId)
     {
         $request->validate([
@@ -59,25 +55,27 @@ class ChatController extends Controller
 
         $user = Auth::user();
         $transfer = Transfer::findOrFail($transferId);
+        $isStaff = in_array($user->role, ['admin', 'super_admin', 'cashier', 'accountant']);
 
-        // تحديد من هو المستقبل (إذا كان المرسل هو الزبون، فالمستقبل هو الوكيل، والعكس)
-        if ($user->id === $transfer->sender_id) {
-            $receiverId = $transfer->destination_agent_id;
-        } elseif ($user->id === $transfer->destination_agent_id) {
-            $receiverId = $transfer->sender_id;
-        } else {
-            return response()->json(['message' => 'غير مصرح لك بإرسال رسالة هنا'], 403);
+        if ($user->id !== $transfer->sender_id && !$isStaff) {
+            return response()->json(['message' => 'غير مصرح لك بإرسال رسالة'], 403);
         }
+
+        // جلب معرف مسؤول ليكون بمثابة "النظام" لاستقبال رسائل الزبون
+        $adminUser = User::whereIn('role', ['admin', 'super_admin'])->first();
+        $systemId = $adminUser ? $adminUser->id : 1;
+
+        // من هو المستقبل؟
+        $receiverId = ($user->id === $transfer->sender_id) ? $systemId : $transfer->sender_id;
 
         try {
             DB::beginTransaction();
-            // ✅ رفع الصورة إذا وجدت
+
             $imagePath = null;
             if ($request->hasFile('image')) {
                 $imagePath = $request->file('image')->store('chat_images', 'public');
             }
 
-            // 1. حفظ رسالة المستخدم
             $message = Message::create([
                 'transfer_id' => $transferId,
                 'sender_id'   => $user->id,
@@ -86,43 +84,32 @@ class ChatController extends Controller
                 'image'       => $imagePath,
             ]);
 
-            // التحضير لإرجاع قائمة بالرسائل الجديدة
             $newMessages = [$message->load('sender:id,name')];
 
-            // 🤖 2. منطق الرد التلقائي
-            // نتحقق: إذا كانت هذه هي الرسالة الأولى في الحوالة، والمرسل هو الزبون
+            // الرد التلقائي من المكتب
             $isFirstMessage = Message::where('transfer_id', $transferId)->count() === 1;
 
             if ($isFirstMessage && $user->id === $transfer->sender_id) {
-                // إرسال رسالة تلقائية نيابة عن الوكيل
                 $autoMessage = Message::create([
                     'transfer_id' => $transferId,
-                    'sender_id'   => $transfer->destination_agent_id, // الوكيل هو المرسل الآن
-                    'receiver_id' => $transfer->sender_id, // الزبون هو المستقبل
-                    'message'     => "مرحباً بك! لقد استلمت طلبك للحوالة رقم ({$transfer->tracking_code}). يرجى تحديد وقت ومكان اللقاء المناسب لك لتسليم المبلغ.",
+                    'sender_id'   => $systemId, // النظام يرد باسم الإدمن
+                    'receiver_id' => $transfer->sender_id,
+                    'message'     => "مرحباً بك! طلبك للحوالة رقم ({$transfer->tracking_code}) وصل لمكتبنا. سنقوم بتجهيز المبلغ، ويمكنك التواصل معنا هنا لأي استفسار.",
                 ]);
                 $newMessages[] = $autoMessage->load('sender:id,name');
             }
 
             DB::commit();
 
-            // سيتم تفعيل إرسال الحدث (Event) لاحقاً للـ Real-time
             foreach ($newMessages as $msg) {
                 broadcast(new MessageSent($msg))->toOthers();
             }
 
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'تم إرسال الرسالة بنجاح',
-                'data'    => $newMessages // نرجع الرسالة (والرسالة التلقائية إن وجدت)
-            ], 201);
+            return response()->json(['status' => 'success', 'message' => 'تم الإرسال', 'data' => $newMessages], 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'فشل إرسال الرسالة: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['status' => 'error', 'message' => 'فشل الإرسال: ' . $e->getMessage()], 500);
         }
     }
 }
