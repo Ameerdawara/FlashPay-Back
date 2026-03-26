@@ -3,43 +3,35 @@
 namespace App\Events;
 
 use App\Models\Message;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class MessageSent implements ShouldBroadcast
+// استخدام ShouldBroadcastNow يضمن إرسال الرسالة فوراً دون انتظار طوابير العمل
+class MessageSent implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public Message $message;
+    public $message;
 
     public function __construct(Message $message)
     {
-        $this->message = $message->load('sender:id,name');
+        $this->message = $message;
     }
 
-    public function broadcastOn(): array
+    // تحديد القناة (Channel) التي سنبث عليها، هنا القناة خاصة برقم الحوالة
+    public function broadcastOn()
+    {
+        return new PrivateChannel('transfer.' . $this->message->transfer_id);
+    }
+
+    // تحديد البيانات التي سيستلمها تطبيق فلاتر
+    public function broadcastWith()
     {
         return [
-            new PrivateChannel('transfer.' . $this->message->transfer_id),
+            'message' => $this->message->load('sender:id,name')
         ];
-    }
-
-    // ✅ مهم جداً: يحدد شكل البيانات المُرسلة
-    public function broadcastWith(): array
-    {
-        return [
-            'message' => $this->message->toArray(),
-        ];
-    }
-
-    // اسم الحدث كما يستمع له Flutter
-    public function broadcastAs(): string
-    {
-        return 'MessageSent';
     }
 }

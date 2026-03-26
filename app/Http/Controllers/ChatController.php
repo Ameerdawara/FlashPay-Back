@@ -9,8 +9,6 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-// لا تنسَ استيراد الـ Event لاحقاً عندما نصل لمرحلة الـ WebSockets
-// use App\Events\MessageSent;
 
 class ChatController extends Controller
 {
@@ -101,14 +99,11 @@ class ChatController extends Controller
                 $newMessages[] = $autoMessage->load('sender:id,name');
             }
 
-        DB::commit();
+            DB::commit();
 
             foreach ($newMessages as $msg) {
                 broadcast(new MessageSent($msg))->toOthers();
-            } catch (\Exception $e) {
-                // تجاهل أخطاء البث
             }
-        }
 
             return response()->json(['status' => 'success', 'message' => 'تم الإرسال', 'data' => $newMessages], 201);
 
