@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 // لا تنسَ استيراد الـ Event لاحقاً عندما نصل لمرحلة الـ WebSockets
-// use App\Events\MessageSent; 
+// use App\Events\MessageSent;
 
 class ChatController extends Controller
 {
@@ -47,82 +47,89 @@ class ChatController extends Controller
     /**
      * إرسال رسالة جديدة (مع ميزة الرد التلقائي)
      */
-    public function sendMessage(Request $request, $transferId)
-    {
-        $request->validate([
-            'message' => 'nullable|string',
-            'image'   => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
-        ]);
-        if (!$request->message && !$request->hasFile('image')) {
-            return response()->json(['message' => 'يجب إرسال نص أو صورة'], 422);
-        }
+   public function sendMessage(Request $request, $transferId)
+{
+    $request->validate([
+        'message' => 'nullable|string',
+        'image'   => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
+    ]);
 
-        $user = Auth::user();
-        $transfer = Transfer::findOrFail($transferId);
-
-        // تحديد من هو المستقبل (إذا كان المرسل هو الزبون، فالمستقبل هو الوكيل، والعكس)
-        if ($user->id === $transfer->sender_id) {
-            $receiverId = $transfer->destination_agent_id;
-        } elseif ($user->id === $transfer->destination_agent_id) {
-            $receiverId = $transfer->sender_id;
-        } else {
-            return response()->json(['message' => 'غير مصرح لك بإرسال رسالة هنا'], 403);
-        }
-
-        try {
-            DB::beginTransaction();
-            // ✅ رفع الصورة إذا وجدت
-            $imagePath = null;
-            if ($request->hasFile('image')) {
-                $imagePath = $request->file('image')->store('chat_images', 'public');
-            }
-
-            // 1. حفظ رسالة المستخدم
-            $message = Message::create([
-                'transfer_id' => $transferId,
-                'sender_id'   => $user->id,
-                'receiver_id' => $receiverId,
-                'message'     => $request->message,
-                'image'       => $imagePath,
-            ]);
-
-            // التحضير لإرجاع قائمة بالرسائل الجديدة
-            $newMessages = [$message->load('sender:id,name')];
-
-            // 🤖 2. منطق الرد التلقائي
-            // نتحقق: إذا كانت هذه هي الرسالة الأولى في الحوالة، والمرسل هو الزبون
-            $isFirstMessage = Message::where('transfer_id', $transferId)->count() === 1;
-
-            if ($isFirstMessage && $user->id === $transfer->sender_id) {
-                // إرسال رسالة تلقائية نيابة عن الوكيل
-                $autoMessage = Message::create([
-                    'transfer_id' => $transferId,
-                    'sender_id'   => $transfer->destination_agent_id, // الوكيل هو المرسل الآن
-                    'receiver_id' => $transfer->sender_id, // الزبون هو المستقبل
-                    'message'     => "مرحباً بك! لقد استلمت طلبك للحوالة رقم ({$transfer->tracking_code}). يرجى تحديد وقت ومكان اللقاء المناسب لك لتسليم المبلغ.",
-                ]);
-                $newMessages[] = $autoMessage->load('sender:id,name');
-            }
-
-            DB::commit();
-
-            // سيتم تفعيل إرسال الحدث (Event) لاحقاً للـ Real-time
-            foreach ($newMessages as $msg) {
-                broadcast(new MessageSent($msg))->toOthers();
-            }
-
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'تم إرسال الرسالة بنجاح',
-                'data'    => $newMessages // نرجع الرسالة (والرسالة التلقائية إن وجدت)
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'فشل إرسال الرسالة: ' . $e->getMessage()
-            ], 500);
-        }
+    if (!$request->message && !$request->hasFile('image')) {
+        return response()->json(['message' => 'يجب إرسال نص أو صورة'], 422);
     }
+
+    $user     = Auth::user();
+    $transfer = Transfer::findOrFail($transferId);
+
+    // --- تحديد المستقبل ---
+    if ($user->id === $transfer->sender_id) {
+        $receiverId = $transfer->destination_agent_id;
+    } elseif ($user->id === $transfer->destination_agent_id) {
+        $receiverId = $transfer->sender_id;
+    } else {
+        return response()->json(['message' => 'غير مصرح لك بإرسال رسالة هنا'], 403);
+    }
+
+    // ✅ التحقق الجديد: هل الطرف الآخر موجود؟
+    if (is_null($receiverId)) {
+        return response()->json([
+            'message' => 'لا يمكن إرسال الرسالة: لم يتم تعيين وكيل استلام لهذه الحوالة بعد.',
+        ], 422);
+    }
+
+    try {
+        DB::beginTransaction();
+
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')->store('chat_images', 'public');
+        }
+
+        $message = Message::create([
+            'transfer_id' => $transferId,
+            'sender_id'   => $user->id,
+            'receiver_id' => $receiverId,
+            'message'     => $request->message,
+            'image'       => $imagePath,
+        ]);
+
+        $newMessages = [$message->load('sender:id,name')];
+
+        // الرد التلقائي — فقط إذا كان destination_agent_id موجوداً
+        $isFirstMessage = Message::where('transfer_id', $transferId)->count() === 1;
+
+        if ($isFirstMessage && $user->id === $transfer->sender_id && !is_null($transfer->destination_agent_id)) {
+            $autoMessage = Message::create([
+                'transfer_id' => $transferId,
+                'sender_id'   => $transfer->destination_agent_id,
+                'receiver_id' => $transfer->sender_id,
+                'message'     => "مرحباً بك! لقد استلمت طلبك للحوالة رقم ({$transfer->tracking_code}). يرجى تحديد وقت ومكان اللقاء المناسب لك لتسليم المبلغ.",
+            ]);
+            $newMessages[] = $autoMessage->load('sender:id,name');
+        }
+
+        DB::commit();
+
+        foreach ($newMessages as $msg) {
+            try {
+                broadcast(new MessageSent($msg))->toOthers();
+            } catch (\Exception $e) {
+                // تجاهل أخطاء البث
+            }
+        }
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'تم إرسال الرسالة بنجاح',
+            'data'    => $newMessages,
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json([
+            'status'  => 'error',
+            'message' => $e->getMessage(),
+        ], 500);
+    }
+}
 }
