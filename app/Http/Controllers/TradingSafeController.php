@@ -33,7 +33,7 @@ class TradingSafeController extends Controller
     {
         $validated = $request->validate([
             'office_id'   => 'required|exists:offices,id',
-            'currency_id' => 'required|exists:currencies,id',
+            'currency_id' => 'exists:currencies,id',
             'amount'      => 'required|numeric|min:0.01',
             'buy_price'   => 'required|numeric|min:0.01',
         ]);
@@ -43,7 +43,7 @@ class TradingSafeController extends Controller
 
         return DB::transaction(function () use ($validated) {
             $safe = TradingSafe::where('office_id', $validated['office_id'])
-                ->where('currency_id', $validated['currency_id'])
+                ->where('currency_id', 1)
                 ->lockForUpdate() // حماية من التعديل المتزامن
                 ->firstOrFail();
 
@@ -62,7 +62,7 @@ class TradingSafeController extends Controller
             ]);
             TradingTransaction::create([
                 'office_id'   => $validated['office_id'],
-                'currency_id' => $validated['currency_id'],
+                'currency_id' =>1,
                 'user_id' => Auth::id(),
                 'type'        => 'buy',
                 'amount'      => $newAmount,
@@ -80,7 +80,7 @@ class TradingSafeController extends Controller
     {
         $validated = $request->validate([
             'office_id'   => 'required|exists:offices,id',
-            'currency_id' => 'required|exists:currencies,id',
+            'currency_id' => 'exists:currencies,id',
             'amount'      => 'required|numeric|min:0.01',
             'sell_price'  => 'required|numeric|min:0.01',
         ]);
@@ -90,7 +90,7 @@ class TradingSafeController extends Controller
 
         return DB::transaction(function () use ($validated) {
             $safe = TradingSafe::where('office_id', $validated['office_id'])
-                ->where('currency_id', $validated['currency_id'])
+                ->where('currency_id', 1)
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -111,7 +111,7 @@ class TradingSafeController extends Controller
              ]);
             TradingTransaction::create([
                 'office_id'   => $validated['office_id'],
-                'currency_id' => $validated['currency_id'],
+                'currency_id' => 1,
                 'user_id' => Auth::id(),
                 'type'        => 'sell',
                 'amount'      => $validated['amount'],

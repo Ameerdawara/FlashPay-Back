@@ -6,11 +6,15 @@ use Illuminate\Database\Eloquent\Model;
 
 class Office extends Model
 {
-    protected $fillable = ['office_id', 'currency_id',  'cost',
-    'city_id',
-    'name',
-    'address',
-    'status'];
+    protected $fillable = [
+        'office_id',
+        'currency_id',
+        'cost',
+        'city_id',
+        'name',
+        'address',
+        'status'
+    ];
     public function city()
     {
         return $this->belongsTo(City::class);
@@ -30,9 +34,13 @@ class Office extends Model
     {
         return $this->morphOne(MainSafe::class, 'owner');
     }
+    public function safe()
+    {
+        return $this->hasOne(OfficeSafe::class);
+    }
     public function tradingTransactions()
     {
         return $this->hasMany(TradingTransaction::class);
     }
-
+    
 }

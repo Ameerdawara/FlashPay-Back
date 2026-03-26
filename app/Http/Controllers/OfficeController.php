@@ -10,14 +10,12 @@ use Illuminate\Support\Facades\DB;
 class OfficeController extends Controller
 {
     // 1. عرض كل المكاتب (Index)
-    public function index()
-    {
-        $offices = Office::with(['city', 'mainSafe'])->get(); // جلب المكاتب مع معلومات مدنها
-        return response()->json([
-            'status' => 'success',
-            'data' => $offices
-        ], 200);
-    }
+   public function index()
+{
+    // أضفنا 'safe' هنا لتظهر في قائمة المكاتب
+    $offices = Office::with(['city', 'mainSafe', 'safe'])->get(); 
+    return response()->json(['status' => 'success', 'data' => $offices]);
+}
 // 4. تعديل مكتب (Update)
 public function update(Request $request, $id)
 {
@@ -55,30 +53,15 @@ public function destroy(Request $request, $id)
 
     try {
         DB::transaction(function () use ($office) {
-            // 2. حذف الصناديق المرتبطة بالمكتب أولاً لتجنب خطأ الـ Foreign Key
-            // (بفرض أن العلاقة هي mainSafe و tradingSafes)
+            $office->safe()->delete(); // !!! إضافة حذف خزنة المكتب أولاً
             $office->mainSafe()->delete();
             $office->tradingSafes()->delete();
-
-            // 3. التعامل مع الموظفين: إما حذفهم أو جعل مكتبهم null
-            // هنا سنقوم بفك ارتباط الموظفين بالمكتب المحذوف
             \App\Models\User::where('office_id', $office->id)->update(['office_id' => null]);
-
-            // 4. حذف المكتب
             $office->delete();
         });
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'تم حذف المكتب وكل متعلقاته بنجاح'
-        ], 200);
-
+        return response()->json(['status' => 'success', 'message' => 'تم الحذف بنجاح']);
     } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'فشل الحذف: قد يكون المكتب مرتبطاً بحوالات أو عمليات مالية لا يمكن حذفها.',
-            'error' => $e->getMessage() // اطلّع على هذا في Console لتعرف السبب الدقيق
-        ], 500);
+        return response()->json(['status' => 'error', 'message' => 'فشل الحذف: ' . $e->getMessage()], 500);
     }
 }
    public function store(Request $request)
@@ -105,9 +88,9 @@ public function destroy(Request $request, $id)
 
             // 2. إنشاء الصندوق الرئيسي (Main Safe)
             $office->mainSafe()->create([
-                'balance' => $validated['balance']
+                'balance' => 0
             ]);
-
+  $office->safe()->create(['balance'=>$validated['balance']]);
             // 3. إنشاء صندوق التداول (Trading Safe) للدولار (currency_id = 1)
             $office->tradingSafes()->create([
                 'currency_id' => 1,
@@ -121,7 +104,7 @@ public function destroy(Request $request, $id)
         // جلب المكتب مع صناديقه لإعادتها في الرد
         return response()->json([
             'status' => 'success',
-            'data' => $office->load(['mainSafe', 'tradingSafes'])
+            'data' => $office->load(['mainSafe', 'tradingSafes','safe'])
         ], 201);
 
     } catch (\Exception $e) {
@@ -131,5 +114,6 @@ public function destroy(Request $request, $id)
         ], 500);
     }
 }
+
 
 }
