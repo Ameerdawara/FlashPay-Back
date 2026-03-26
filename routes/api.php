@@ -10,6 +10,7 @@ use App\Http\Controllers\MessageController;
 use App\Http\Controllers\OfficeController;
 use App\Http\Controllers\TransferController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SafeActionController;
 use App\Http\Controllers\TradingSafeController; // لا تنسى استدعاء الكونترولر الجديد
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -42,6 +43,8 @@ Route::middleware('auth:sanctum')->get('/me', function (Request $request) {
 });
 Route::middleware('auth:sanctum')->group(function () {
     // جلب قائمة الموظفين (Users)
+    Route::post('/safes/adjust', [SafeActionController::class, 'adjust']);
+    Route::post('/safes/transfer', [SafeActionController::class, 'transfer']);
     Route::get('/users', function () {
         // نستخدم with('office') لجلب بيانات المكتب المرتبط لكي لا يحدث خطأ في الواجهة الأمامية
 
