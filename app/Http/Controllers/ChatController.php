@@ -25,7 +25,7 @@ class ChatController extends Controller
         }
 
         $messages = Message::where('transfer_id', $transferId)
-            ->with('sender:id,name')
+            ->with('sender:id,name,role')
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -102,7 +102,7 @@ class ChatController extends Controller
             DB::commit();
 
             foreach ($newMessages as $msg) {
-                broadcast(new MessageSent($msg))->toOthers();
+                broadcast(new MessageSent($msg));
             }
 
             return response()->json(['status' => 'success', 'message' => 'تم الإرسال', 'data' => $newMessages], 201);

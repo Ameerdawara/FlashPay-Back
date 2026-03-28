@@ -8,5 +8,5 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
 // التحقق من صلاحية الدخول لغرفة محادثة الحوالة
 Broadcast::channel('transfer.{transferId}', function ($user, $transferId) {
     // مؤقتاً للتجربة سنسمح بالدخول، لاحقاً يمكنك التأكد أن اليوزر هو المرسل أو الوكيل
-    return true; 
+    return true;
 });
