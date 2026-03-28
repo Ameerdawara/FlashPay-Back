@@ -49,6 +49,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/safes/transfer', [SafeActionController::class, 'transfer']);
     Route::post('/safes/transfer-to-office', [SafeActionController::class, 'transferToOfficeSafe']);
     Route::post('/offices/{officeId}/safe', [OfficeSafeController::class, 'updateBalance']);
+    Route::post('/currencies/{id}/rates', [CurrencyController::class, 'updateRates']);
+    Route::post('/currencies/get-rate', [CurrencyController::class, 'getRate']);
     Route::get('/users', function () {
         // نستخدم with('office') لجلب بيانات المكتب المرتبط لكي لا يحدث خطأ في الواجهة الأمامية
 
