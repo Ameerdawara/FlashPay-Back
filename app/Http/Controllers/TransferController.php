@@ -177,12 +177,7 @@ class TransferController extends Controller
             // الإدمن يوافق على الحوالة الواردة ويجهزها للاستلام
             if (in_array($user->role, ['admin', 'super_admin'])) {
                 if ($request->status === 'ready' && $transfer->status === 'waiting') {
-                    $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
-                        ->where('owner_type', 'App\Models\Office')
-                        ->first();
-
-                    if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
-                    $officeSafe->increment('balance', $transfer->amount_in_usd);
+                   
 
                     // إرسال رسالة الواتساب
                     $phone = $transfer->receiver_phone;
