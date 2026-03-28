@@ -177,6 +177,8 @@ class TransferController extends Controller
             // الإدمن يوافق على الحوالة الواردة ويجهزها للاستلام
             if (in_array($user->role, ['admin', 'super_admin'])) {
                 if ($request->status === 'ready' && $transfer->status === 'waiting') {
+                   
+
                     // إرسال رسالة الواتساب
                     $phone = $transfer->receiver_phone;
                     $amount = $transfer->amount;
