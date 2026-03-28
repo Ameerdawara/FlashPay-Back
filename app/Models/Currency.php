@@ -16,4 +16,8 @@ class Currency extends Model
 
         return $this->hasMany(TradingSafe::class);
     }
+    public function rates()
+{
+    return $this->hasMany(CurrencyRate::class)->orderBy('min_amount');
+}
 }
