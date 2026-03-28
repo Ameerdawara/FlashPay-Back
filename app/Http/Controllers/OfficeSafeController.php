@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Office;
+use App\Models\OfficeSafe;
 use Illuminate\Http\Request;
 
 class OfficeSafeController extends Controller
@@ -11,12 +11,12 @@ class OfficeSafeController extends Controller
     public function updateBalance(Request $request, $officeId)
     {
         $validated = $request->validate([
-            'amount' => 'required|numeric', // القيمة (موجبة للإيداع وسالبة للسحب)
+            'amount' => 'required|numeric',
             'type'   => 'required|in:deposit,withdraw',
         ]);
 
-        $office = Office::findOrFail($officeId);
-        $safe = $office->safe;
+        // التعديل هنا: استعلام مباشر عن الخزنة بدلاً من الاعتماد على العلاقات
+        $safe = OfficeSafe::where('office_id', $officeId)->first();
 
         if (!$safe) {
             return response()->json(['message' => 'هذا المكتب لا يملك خزنة!'], 404);
@@ -26,7 +26,6 @@ class OfficeSafeController extends Controller
             return response()->json(['message' => 'الرصيد في الخزنة غير كافٍ!'], 400);
         }
 
-        // التعديل
         if ($request->type === 'deposit') {
             $safe->increment('balance', abs($request->amount));
         } else {
