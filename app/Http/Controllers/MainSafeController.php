@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 class MainSafeController extends Controller
 {
-    
+
     public function index()
 {
     try {
