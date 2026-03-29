@@ -6,5 +6,5 @@ use Illuminate\Database\Eloquent\Model;
 
 class ExtraBox extends Model
 {
-    protected $fillable = ['name', 'amount'];
+    protected $fillable = ['name', 'amount','office_id'];
 }

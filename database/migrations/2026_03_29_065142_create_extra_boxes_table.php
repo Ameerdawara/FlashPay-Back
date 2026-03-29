@@ -11,7 +11,9 @@ return new class extends Migration
         Schema::create('extra_boxes', function (Blueprint $table) {
             $table->id();
             $table->string('name'); // اسم الصندوق الإضافي
-            $table->decimal('amount', 15, 2)->default(0.00); // الكمية أو الرصيد
+            $table->decimal('amount', 15, 2)->default(0.00);
+            $table->foreignId('office_id')->constrained('offices')->onDelete('cascade');
+            // الكمية أو الرصيد
             $table->timestamps();
         });
     }

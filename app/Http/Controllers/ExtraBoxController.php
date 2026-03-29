@@ -21,7 +21,9 @@ class ExtraBoxController extends Controller
     {
         $request->validate([
             'name'   => 'required|string|max:255',
-            'amount' => 'required|numeric'
+            'amount' => 'required|numeric',
+            'office_id'=> 'required|exists:offices,id'
+
         ]);
 
         $box = ExtraBox::create($request->all());
@@ -37,7 +39,7 @@ class ExtraBoxController extends Controller
     public function show($id)
     {
         $box = ExtraBox::findOrFail($id);
-        
+
         return response()->json([
             'status' => 'success',
             'data' => $box
