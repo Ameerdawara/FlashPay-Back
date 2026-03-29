@@ -57,8 +57,8 @@ class TransferController extends Controller
 
         $trackingCode = 'TRX-' . strtoupper(Str::random(8));
 
-        $currency = Currency::findOrFail($validated['send_currency_id']);
-        $amountInUsd = $validated['amount'] * $currency->price;
+        $currency = Currency::with('rates')->findOrFail($validated['send_currency_id']);
+        $amountInUsd = $validated['amount'] * $this->getEffectiveRate($currency, $validated['amount']);
 
         $transfer = Transfer::create([
             'tracking_code'          => $trackingCode,
@@ -111,9 +111,9 @@ class TransferController extends Controller
 
         // إعادة حساب amount_in_usd إذا تغيّر المبلغ
         if (isset($updateFields['amount'])) {
-            $currency = Currency::find($transfer->send_currency_id);
+            $currency = Currency::with('rates')->find($transfer->send_currency_id);
             if ($currency) {
-                $updateFields['amount_in_usd'] = $updateFields['amount'] * $currency->price;
+                $updateFields['amount_in_usd'] = $updateFields['amount'] * $this->getEffectiveRate($currency, $updateFields['amount']);
             }
         }
 
@@ -177,7 +177,7 @@ class TransferController extends Controller
             // الإدمن يوافق على الحوالة الواردة ويجهزها للاستلام
             if (in_array($user->role, ['admin', 'super_admin'])) {
                 if ($request->status === 'ready' && $transfer->status === 'waiting') {
-                   
+
 
                     // إرسال رسالة الواتساب
                     $phone = $transfer->receiver_phone;
@@ -227,5 +227,31 @@ class TransferController extends Controller
                 'data' => $transfer->load(['sender', 'currency'])
             ], 200);
         });
+    }
+
+    /**
+     * يحسب سعر الصرف الفعلي للعملة بناءً على الشرائح (currency_rates).
+     * إن وُجدت شريحة تنطبق على المبلغ → يُعيد سعرها.
+     * وإلا → يُعيد السعر الأساسي (currency->price).
+     */
+    private function getEffectiveRate(Currency $currency, float $amount): float
+    {
+        $rates = $currency->rates ?? collect();
+
+        if ($rates->isNotEmpty()) {
+            $sorted = $rates->sortBy('min_amount')->values();
+
+            foreach ($sorted as $tier) {
+                $min = (float) $tier->min_amount;
+                $max = $tier->max_amount !== null ? (float) $tier->max_amount : INF;
+
+                if ($amount >= $min && $amount <= $max) {
+                    return (float) $tier->rate;
+                }
+            }
+        }
+
+        // fallback: السعر الأساسي من جدول currencies
+        return (float) ($currency->price ?? 1);
     }
 }
