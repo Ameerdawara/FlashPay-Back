@@ -27,21 +27,24 @@ class InternalTransferController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'office_id'     => 'required|exists:offices,id',
-            'sender_name'   => 'required|string|max:255',
-            'receiver_name' => 'required|string|max:255',
-            'amount'        => 'required|numeric|min:0.01',
-            'commission'    => 'required|numeric|min:0',
-            'is_paid'       => 'boolean',
-            'transfer_date' => 'required|date',
+            'office_id'      => 'nullable|exists:offices,id',
+            'sender_name'    => 'required|string|max:255',
+            'receiver_name'  => 'required|string|max:255',
+            'receiver_phone' => 'nullable|string|max:30',
+            'amount'         => 'required|numeric|min:0.01',
+            'commission'     => 'required|numeric|min:0',
+            'currency'       => 'required|string|max:10',
+            'fee_payer'      => 'required|in:sender,receiver',
+            'is_paid'        => 'boolean',
+            'transfer_date'  => 'required|date',
         ]);
 
         $transfer = InternalTransfer::create($request->all());
 
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'تم إنشاء الحوالة الداخلية بنجاح',
-            'data' => $transfer
+            'data'    => $transfer
         ], 201);
     }
 

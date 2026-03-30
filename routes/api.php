@@ -11,8 +11,9 @@ use App\Http\Controllers\OfficeController;
 use App\Http\Controllers\TransferController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SafeActionController;
-use App\Http\Controllers\TradingSafeController; // لا تنسى استدعاء الكونترولر الجديد
+use App\Http\Controllers\TradingSafeController;
 use App\Http\Controllers\OfficeSafeController;
+use App\Http\Controllers\InternalTransferController;
 use Illuminate\Http\Request;
 
 use Illuminate\Support\Facades\Route;
@@ -140,4 +141,9 @@ Route::get('/main-safes', [MainSafeController::class, 'index']);
 
     Route::get('/transfers/{id}/messages', [ChatController::class, 'getMessages']);
     Route::post('/transfers/{id}/messages', [ChatController::class, 'sendMessage']);
+
+    // الحوالات الداخلية
+    Route::get('/internal-transfers', [InternalTransferController::class, 'index']);
+    Route::post('/internal-transfers', [InternalTransferController::class, 'store']);
+    Route::patch('/internal-transfers/{id}/toggle-paid', [InternalTransferController::class, 'togglePaidStatus']);
 });
