@@ -50,6 +50,7 @@ class AuthController extends Controller
                 'exists:offices,id',
                 'nullable'
             ],
+            'fcm_token' => 'nullable|string', // ✅ أضف هذا السطر
         ]);
 
         try {
@@ -122,6 +123,7 @@ class AuthController extends Controller
         $request->validate([
             'email'    => 'required|email',
             'password' => 'required',
+            'fcm_token' => 'nullable|string', // ✅ أضف هذا السطر
         ]);
 
         if (!Auth::attempt(['email' => $request->email, 'password' => $request->password, 'is_active' => 1])) {
@@ -141,6 +143,11 @@ class AuthController extends Controller
 
         /** @var \App\Models\User $user */
         $user  = Auth::user();
+        // ✅ تحديث التوكن إذا تم إرساله مع طلب تسجيل الدخول
+    if ($request->has('fcm_token') && !empty($request->fcm_token)) {
+        $user->fcm_token = $request->fcm_token;
+        $user->save();
+    }
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
@@ -194,5 +201,20 @@ class AuthController extends Controller
 
         $status = $user->is_active ? 'تفعيل' : 'حظر';
         return response()->json(['message' => "تم $status المستخدم بنجاح"]);
+    }
+    public function updateFcmToken(Request $request)
+    {
+        $request->validate([
+            'fcm_token' => 'required|string',
+        ]);
+
+        $user = $request->user();
+        $user->fcm_token = $request->fcm_token;
+        $user->save();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'تم تحديث الـ FCM Token بنجاح'
+        ]);
     }
 }

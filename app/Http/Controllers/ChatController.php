@@ -104,9 +104,31 @@ class ChatController extends Controller
             foreach ($newMessages as $msg) {
                 broadcast(new MessageSent($msg));
             }
+            // ✅ إضافة: إرسال إشعار للزبون إذا كان المرسل من طاقم المكتب
+            if ($isStaff) {
+                $customer = User::find($transfer->sender_id);
+                if ($customer && $customer->fcm_token) {
+                    $notificationBody = $request->message ? $request->message : 'تم إرسال صورة';
+
+                    $fcmService = new \App\Services\FcmService();
+
+                    // ✅ نمرر البيانات هنا كمصفوفة في المعامل الرابع
+                    $fcmService->sendNotification(
+                        $customer->fcm_token,
+                        "رسالة جديدة بخصوص الحوالة ({$transfer->tracking_code})",
+                        $notificationBody,
+                        [
+                            'transfer_id' => (string)$transfer->id, // تحويل الرقم لنص ضروري جداً لـ Firebase
+                            'tracking_code'   => $transfer->tracking_code, // ✅ تمت الإضافة
+                            'current_user_id' => (string)$customer->id,    // ✅ تمت الإضافة
+                            'type'        => 'chat',
+                            'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
+                        ]
+                    );
+                }
+            }
 
             return response()->json(['status' => 'success', 'message' => 'تم الإرسال', 'data' => $newMessages], 201);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['status' => 'error', 'message' => 'فشل الإرسال: ' . $e->getMessage()], 500);
