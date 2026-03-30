@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Log;
 
 class TransferController extends Controller
 {
-   public function index(Request $request)
+    public function index(Request $request)
     {
         $user = Auth::user();
         $query = Transfer::query();
@@ -30,8 +30,8 @@ class TransferController extends Controller
         }
 
         $transfers = $query->with(['sender', 'currency', 'sendCurrency'])
-                           ->orderBy('created_at', 'desc')
-                           ->get();
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return response()->json([
             'status' => 'success',
@@ -177,7 +177,22 @@ class TransferController extends Controller
             // الإدمن يوافق على الحوالة الواردة ويجهزها للاستلام
             if (in_array($user->role, ['admin', 'super_admin'])) {
                 if ($request->status === 'ready' && $transfer->status === 'waiting') {
-                   
+                    // ✅ إضافة: إرسال إشعار للزبون بأن الحوالة جاهزة
+                    $customer = \App\Models\User::find($transfer->sender_id);
+                    if ($customer && $customer->fcm_token) {
+                        $fcmService = new \App\Services\FcmService();
+                        $fcmService->sendNotification(
+                            $customer->fcm_token,
+                            "حوالتك جاهزة! ✅",
+                            "طلبك للحوالة رقم ({$transfer->tracking_code}) أصبح جاهزاً للاستلام.",
+                            [
+                                'transfer_id' => (string)$transfer->id,
+                                'type'        => 'transfer_ready',
+                                'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
+                            ]
+                        );
+                    }
+
 
                     // إرسال رسالة الواتساب
                     $phone = $transfer->receiver_phone;
@@ -195,6 +210,7 @@ class TransferController extends Controller
                         Log::error('فشل إرسال رسالة واتساب للحوالة ' . $transfer->id . ' السبب: ' . $e->getMessage());
                     }
                 }
+
 
                 $transfer->status = $request->status;
                 $transfer->fee = $request->fee;
@@ -220,6 +236,27 @@ class TransferController extends Controller
             }
 
             $transfer->save();
+            // ✅ إضافة: إرسال إشعار للزبون عند اكتمال الحوالة
+            // داخل TransferController.php في دالة update
+
+            if ($transfer->status === 'completed') {
+                $sender = \App\Models\User::find($transfer->sender_id);
+                if ($sender && $sender->fcm_token) {
+                    $fcmService = new \App\Services\FcmService();
+
+                    $fcmService->sendNotification(
+                        $sender->fcm_token,
+                        "اكتملت الحوالة! 🎉",
+                        "تم تسليم حوالتك رقم ({$transfer->tracking_code}) بنجاح.",
+                        [
+                            'transfer_id' => (string)$transfer->id,
+                            'tracking_code'   => (string)$transfer->tracking_code, // ✅ تم إضافته
+                            'current_user_id' => (string)$sender->id,               // ✅ تم إضافته
+                            'type'        => 'transfer_completed'
+                        ]
+                    );
+                }
+            }
 
             return response()->json([
                 'status' => 'success',

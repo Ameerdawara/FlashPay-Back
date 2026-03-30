@@ -37,7 +37,7 @@ Route::get('/currencies', [CurrencyController::class,'index']);
 | Protected Routes (المسارات المحمية - تحتاج Token)
 |--------------------------------------------------------------------------
 */
-
+Route::middleware('auth:sanctum')->post('/update-fcm-token', [AuthController::class, 'updateFcmToken']);
 Route::middleware('auth:sanctum')->get('/me', function (Request $request) {
     return response()->json([
         'user' => $request->user()
