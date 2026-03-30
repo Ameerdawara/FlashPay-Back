@@ -25,30 +25,21 @@ class InternalTransferController extends Controller
 
     public function store(Request $request)
     {
-        // 1. التحقق من الحقول القادمة من الفرونت (المرسل، المستلم، المبلغ، العمولة، وحالة الدفع)
-        $validated = $request->validate([
+        $request->validate([
+            'office_id'     => 'required|exists:offices,id',
             'sender_name'   => 'required|string|max:255',
             'receiver_name' => 'required|string|max:255',
             'amount'        => 'required|numeric|min:0.01',
             'commission'    => 'required|numeric|min:0',
-            'is_paid'       => 'required|boolean', // يتم استقبالها من الـ Radio Button
+            'is_paid'       => 'boolean',
+            'transfer_date' => 'required|date',
         ]);
 
-      
-        $user = Auth::user();
-
-        // 3. دمج الحقول التلقائية (المكتب والتاريخ الحالي) مع البيانات المعتمدة
-        $transferData = array_merge($validated, [
-            'office_id'     => $user->office_id,    // مكتب الموظف تلقائياً
-            'transfer_date' => now()->toDateString(), // تاريخ اليوم تلقائياً
-        ]);
-
-        // 4. الحفظ في قاعدة البيانات
-        $transfer = InternalTransfer::create($transferData);
+        $transfer = InternalTransfer::create($request->all());
 
         return response()->json([
             'status' => 'success',
-            'message' => 'تم تسجيل الحوالة الداخلية بنجاح',
+            'message' => 'تم إنشاء الحوالة الداخلية بنجاح',
             'data' => $transfer
         ], 201);
     }
