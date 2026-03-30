@@ -4,57 +4,71 @@ namespace App\Http\Controllers;
 
 use App\Models\InternalTransfer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class InternalTransferController extends Controller
 {
-    // عرض الحوالات الداخلية لمكتب معين
-    public function index(Request $request)
+    // عرض الحوالات الخاصة بمكتب الموظف المسجل حالياً فقط
+    public function index()
     {
-        // إذا أردت جلب حوالات مكتب محدد أرسل office_id في الطلب
-        $query = InternalTransfer::with('office')->orderBy('transfer_date', 'desc');
-
-        if ($request->has('office_id')) {
-            $query->where('office_id', $request->office_id);
-        }
+        $user = Auth::user();
+        
+        $transfers = InternalTransfer::where('office_id', $user->office_id)
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return response()->json([
             'status' => 'success',
-            'data' => $query->get()
+            'data' => $transfers
         ]);
     }
 
-    // إنشاء حوالة داخلية جديدة
     public function store(Request $request)
     {
-        $request->validate([
-            'office_id'     => 'required|exists:offices,id',
+        // 1. التحقق من الحقول القادمة من الفرونت (المرسل، المستلم، المبلغ، العمولة، وحالة الدفع)
+        $validated = $request->validate([
             'sender_name'   => 'required|string|max:255',
             'receiver_name' => 'required|string|max:255',
             'amount'        => 'required|numeric|min:0.01',
             'commission'    => 'required|numeric|min:0',
-            'is_paid'       => 'boolean',
-            'transfer_date' => 'required|date',
+            'is_paid'       => 'required|boolean', // يتم استقبالها من الـ Radio Button
         ]);
 
-        $transfer = InternalTransfer::create($request->all());
+      
+        $user = Auth::user();
+
+        // 3. دمج الحقول التلقائية (المكتب والتاريخ الحالي) مع البيانات المعتمدة
+        $transferData = array_merge($validated, [
+            'office_id'     => $user->office_id,    // مكتب الموظف تلقائياً
+            'transfer_date' => now()->toDateString(), // تاريخ اليوم تلقائياً
+        ]);
+
+        // 4. الحفظ في قاعدة البيانات
+        $transfer = InternalTransfer::create($transferData);
 
         return response()->json([
             'status' => 'success',
-            'message' => 'تم إنشاء الحوالة الداخلية بنجاح',
+            'message' => 'تم تسجيل الحوالة الداخلية بنجاح',
             'data' => $transfer
         ], 201);
     }
 
-    // تغيير حالة الدفع (من غير مدفوع إلى مدفوع والعكس)
+    // تابع تغيير الحالة (مفيد جداً إذا أراد الموظف تحديث حالة الدفع لاحقاً)
     public function togglePaidStatus($id)
     {
         $transfer = InternalTransfer::findOrFail($id);
+        
+        // حماية: التأكد أن الموظف لا يغير حالة حوالة لمكتب آخر
+        if ($transfer->office_id !== Auth::user()->office_id) {
+            return response()->json(['message' => 'غير مصرح لك'], 403);
+        }
+
         $transfer->is_paid = !$transfer->is_paid;
         $transfer->save();
 
         return response()->json([
             'status' => 'success',
-            'message' => $transfer->is_paid ? 'تم تسليم الحوالة' : 'تم إلغاء تسليم الحوالة',
+            'message' => 'تم تحديث حالة الدفع',
             'data' => $transfer
         ]);
     }
