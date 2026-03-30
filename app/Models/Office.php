@@ -42,5 +42,9 @@ class Office extends Model
     {
         return $this->hasMany(TradingTransaction::class);
     }
+    public function internalTransfers()
+    {
+        return $this->hasMany(InternalTransfer::class);
+    }
     
 }
