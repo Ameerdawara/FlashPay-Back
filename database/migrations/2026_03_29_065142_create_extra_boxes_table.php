@@ -13,7 +13,6 @@ return new class extends Migration
             $table->string('name'); // اسم الصندوق الإضافي
             $table->decimal('amount', 15, 2)->default(0.00);
             $table->foreignId('office_id')->constrained('offices')->onDelete('cascade');
-            // الكمية أو الرصيد
             $table->timestamps();
         });
     }
