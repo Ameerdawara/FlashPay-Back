@@ -13,6 +13,7 @@ return new class extends Migration
             $table->foreignId('office_id')->nullable()->constrained('offices')->onDelete('cascade');
             $table->string('sender_name');
             $table->string('receiver_name');
+            $table->string('destination_province');
             $table->string('receiver_phone')->nullable();
             $table->decimal('amount', 15, 2);
             $table->decimal('commission', 15, 2)->default(0.00);
