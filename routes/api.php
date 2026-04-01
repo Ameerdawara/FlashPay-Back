@@ -14,6 +14,8 @@ use App\Http\Controllers\SafeActionController;
 use App\Http\Controllers\TradingSafeController;
 use App\Http\Controllers\OfficeSafeController;
 use App\Http\Controllers\InternalTransferController;
+use App\Http\Controllers\ProfitSafeController;
+
 use Illuminate\Http\Request;
 
 use Illuminate\Support\Facades\Route;
@@ -126,7 +128,7 @@ Route::get('/main-safes', [MainSafeController::class, 'index']);
     Route::put('/transfers/{id}/edit', [TransferController::class, 'editTransfer']);
     Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
     Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
-
+      Route::post('/safes/transfer-profit', [ProfitSafeController::class, 'transferProfitToOffice']);
     Route::prefix('trading')->group(function () {
         Route::post('/buy', [TradingSafeController::class, 'buy']);
         Route::post('/sell', [TradingSafeController::class, 'sell']);

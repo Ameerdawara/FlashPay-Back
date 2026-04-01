@@ -99,16 +99,24 @@ class TradingSafeController extends Controller
             }
 
             // حساب الربح المحقق بناءً على متوسط التكلفة
-                $costAtTime = $safe->cost; // احفظها أولاً
+             // حساب الربح المحقق بناءً على متوسط التكلفة
+$costAtTime = $safe->cost;
+$profit = ($validated['sell_price'] - $costAtTime) * $validated['amount'];
+$newBalance = $safe->balance - $validated['amount'];
 
-             $profit = ($validated['sell_price'] - $costAtTime) * $validated['amount'];
+// 1. تحديث صندوق التداول (الرصيد + الأرباح)
+$safe->update([
+    'balance' => $newBalance,
+    'cost'    => $newBalance == 0 ? 0 : $costAtTime,
+    'profit'  => $safe->profit + $profit // تحديث الأرباح
+]);
 
-             $newBalance = $safe->balance - $validated['amount'];
-
-             $safe->update([
-                 'balance' => $newBalance,
-                 'cost'    => $newBalance == 0 ? 0 : $costAtTime,
-             ]);
+// 2. تحديث صندوق أرباح المكتب (ProfitSafe)
+$profitSafe = \App\Models\ProfitSafe::firstOrCreate(
+    ['office_id' => $validated['office_id']],
+    ['profit_trade' => 0, 'profit_main' => 0]
+);
+$profitSafe->increment('profit_trade', $profit);
             TradingTransaction::create([
                 'office_id'   => $validated['office_id'],
                 'currency_id' => 1,

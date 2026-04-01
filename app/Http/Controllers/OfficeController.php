@@ -13,7 +13,7 @@ class OfficeController extends Controller
    public function index()
 {
     // أضفنا 'safe' هنا لتظهر في قائمة المكاتب
-    $offices = Office::with(['city', 'mainSafe', 'safe'])->get(); 
+    $offices = Office::with(['city', 'mainSafe', 'safe'])->get();
     return response()->json(['status' => 'success', 'data' => $offices]);
 }
 // 4. تعديل مكتب (Update)
@@ -100,7 +100,11 @@ public function destroy(Request $request, $id)
 
             return $office;
         });
-
+        // 4. إنشاء صندوق الأرباح (Profit Safe)
+$office->profitSafe()->create([
+    'profit_trade' => 0,
+    'profit_main'  => 0
+]);
         // جلب المكتب مع صناديقه لإعادتها في الرد
         return response()->json([
             'status' => 'success',
