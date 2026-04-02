@@ -15,12 +15,13 @@ return new class extends Migration
             $table->id();
             $table->string('name'); // مثلاً: دولار أمريكي
             $table->string('code', 10); // USD
-            $table->string('price', 10)->nullable(); // $
+            $table->string('price', 10)->nullable(); 
+            $table->string('main_price');
             $table->timestamps();
         });
     }
 
-    /**
+    /*
      * Reverse the migrations.
      */
     public function down(): void
