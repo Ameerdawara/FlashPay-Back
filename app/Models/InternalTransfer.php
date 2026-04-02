@@ -10,6 +10,7 @@ class InternalTransfer extends Model
         'office_id',
         'sender_name',
         'receiver_name',
+        'destination_province',
         'receiver_phone',
         'amount',
         'commission',

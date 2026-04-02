@@ -31,6 +31,7 @@ class InternalTransferController extends Controller
             'sender_name'    => 'required|string|max:255',
             'receiver_name'  => 'required|string|max:255',
             'receiver_phone' => 'nullable|string|max:30',
+            'destination_province' => 'required|string|max:255',
             'amount'         => 'required|numeric|min:0.01',
             'commission'     => 'required|numeric|min:0',
             'currency'       => 'required|string|max:10',
