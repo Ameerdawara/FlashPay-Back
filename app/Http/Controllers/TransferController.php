@@ -217,23 +217,47 @@ class TransferController extends Controller
             }
 
             // الكاشير يسلم المبلغ وينهي الحوالة
-            elseif (in_array($user->role, ['cashier', 'accountant'])) {
-                if ($request->status === 'completed' && $transfer->status === 'ready') {
-                    $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
-                        ->where('owner_type', 'App\Models\Office')
-                        ->first();
+          elseif (in_array($user->role, ['cashier', 'accountant'])) {
+    if ($request->status === 'completed' && $transfer->status === 'ready') {
+        // 1. تحديث رصيد الصندوق الرئيسي للمكتب
+        $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
+            ->where('owner_type', 'App\Models\Office')
+            ->first();
 
-                    if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
-                    $officeSafe->decrement('balance', $transfer->amount_in_usd);
-                }
+        if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
+        
+        $officeSafe->decrement('balance', $transfer->amount_in_usd);
 
-                if ($request->hasFile('receiver_id_image')) {
-                    $path = $request->file('receiver_id_image')->store('receipts', 'public');
-                    $transfer->receiver_id_image = $path;
-                }
+        // 2. حساب الربح بناءً على فرق سعر العملة
+        $currency = \App\Models\Currency::find($transfer->send_currency_id);
+        
+        if ($currency) {
+            // حساب الفرق بين سعر البيع (price) وسعر التكلفة (main_price)
+            $priceDiff = (float)$currency->price - (float)$currency->main_price;
+            $profit = $transfer->amount * $priceDiff;
 
-                $transfer->status = $request->status;
-            }
+            // تخزين الربح في حقل العمولات الخاص بالحوالة
+            $transfer->fee = $profit;
+
+            // 3. ترحيل الربح إلى جدول أرباح المكاتب (ProfitSafe)
+            // نستخدم updateOrCreate لضمان وجود سجل للمكتب، ثم نزيد القيمة
+            $profitSafe = \App\Models\ProfitSafe::firstOrCreate(
+                ['office_id' => $transfer->destination_office_id]
+            );
+
+            // إضافة قيمة الـ fee المحسوبة إلى عمود profit_main
+            $profitSafe->increment('profit_main', $profit);
+        }
+    }
+
+    // رفع صورة هوية المستلم إن وجدت
+    if ($request->hasFile('receiver_id_image')) {
+        $path = $request->file('receiver_id_image')->store('receipts', 'public');
+        $transfer->receiver_id_image = $path;
+    }
+
+    $transfer->status = $request->status;
+}
 
             $transfer->save();
             // ✅ إضافة: إرسال إشعار للزبون عند اكتمال الحوالة
