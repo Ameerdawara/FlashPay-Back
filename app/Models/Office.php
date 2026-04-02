@@ -46,5 +46,8 @@ class Office extends Model
     {
         return $this->hasMany(InternalTransfer::class);
     }
-    
+    public function profitSafe()
+{
+    return $this->hasOne(ProfitSafe::class);
+}
 }
