@@ -102,6 +102,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/users/{id}/toggle-status', [AuthController::class, 'toggleStatus']);
     Route::get('/trading/report', [TradingSafeController::class, 'dailyReport']);
     Route::get('/trading/report/details', [TradingSafeController::class, 'detailedReport']);
+    Route::post('/trading-safe/update-cost', [TradingSafeController::class, 'updateCostManual']);
     // 2. إدارة المكاتب والدول والمدن (صلاحيات كاملة)
     Route::apiResource('offices', OfficeController::class);
     Route::apiResource('countries', CountryController::class)->except(['index']);
@@ -129,6 +130,7 @@ Route::get('/main-safes', [MainSafeController::class, 'index']);
     Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
     Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
       Route::post('/safes/transfer-profit', [ProfitSafeController::class, 'transferProfitToOffice']);
+    Route::get('/profit-safe', [ProfitSafeController::class, 'getProfitSafe']);
     Route::prefix('trading')->group(function () {
         Route::post('/buy', [TradingSafeController::class, 'buy']);
         Route::post('/sell', [TradingSafeController::class, 'sell']);

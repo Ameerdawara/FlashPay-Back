@@ -21,7 +21,15 @@ class ProfitSafeController extends Controller
             $officeSafe = OfficeSafe::where('office_id', $validated['office_id'])->lockForUpdate()->firstOrFail();
 
             $amount = $validated['amount'];
-            $columnToDeduct = $validated['source'] === 'trade' ? 'profit_trade' : 'profit_main';
+
+            // تحديد عمود الخصم من صندوق الأرباح وعمود الإضافة في خزنة المكتب بناءً على المصدر
+            if ($validated['source'] === 'trade') {
+                $columnToDeduct = 'profit_trade';
+                $columnToIncrement = 'balance_sy'; // أرباح التداول تذهب للرصيد السوري
+            } else {
+                $columnToDeduct = 'profit_main';
+                $columnToIncrement = 'balance';    // الأرباح الرئيسية تذهب لرصيد الدولار
+            }
 
             // التحقق من أن الأرباح تكفي
             if ($profitSafe->{$columnToDeduct} < $amount) {
@@ -31,8 +39,8 @@ class ProfitSafeController extends Controller
             // خصم الأرباح من صندوق الأرباح
             $profitSafe->decrement($columnToDeduct, $amount);
 
-            // إضافة المبلغ كسيولة في خزنة المكتب (OfficeSafe)
-            $officeSafe->increment('balance', $amount);
+            // إضافة المبلغ كسيولة في خزنة المكتب (OfficeSafe) في العمود المخصص
+            $officeSafe->increment($columnToIncrement, $amount);
 
             return response()->json([
                 'status' => 'success',
@@ -41,13 +49,14 @@ class ProfitSafeController extends Controller
             ]);
         });
     }
-    public function getProfitSafe(Request $request) {
-    $officeId = $request->user()->office_id; // أو حسب طريقتك في جلب رقم المكتب
-    $profit = \App\Models\ProfitSafe::where('office_id', $officeId)->first();
 
-    return response()->json([
-        'status' => 'success',
-        'data' => $profit
-    ]);
-}
+    public function getProfitSafe(Request $request) {
+        $officeId = $request->user()->office_id; // أو حسب طريقتك في جلب رقم المكتب
+        $profit = \App\Models\ProfitSafe::where('office_id', $officeId)->first();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $profit
+        ]);
+    }
 }
