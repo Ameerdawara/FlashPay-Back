@@ -20,16 +20,13 @@ class TransferController extends Controller
         $user = Auth::user();
         $query = Transfer::query();
 
-        // (اختياري) إذا كان الموظف كاشير أو محاسب، يجلب حوالات مكتبه فقط
-        // if (in_array($user->role, ['cashier', 'accountant'])) {
-        //     $query->where('destination_office_id', $user->office_id);
-        // }
+       
 
         if ($request->has('status')) {
             $query->where('status', $request->status);
         }
 
-        $transfers = $query->with(['sender', 'currency', 'sendCurrency','destinationOffice'])
+        $transfers = $query->with(['sender', 'currency', 'sendCurrency','destinationOffice'])->where('destination_office_id', $user->office_id)
             ->orderBy('created_at', 'desc')
             ->get();
 
