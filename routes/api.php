@@ -47,6 +47,18 @@ Route::middleware('auth:sanctum')->get('/me', function (Request $request) {
     ]);
 });
 Route::middleware('auth:sanctum')->group(function () {
+
+Route::get('/super-safe', [\App\Http\Controllers\SuperSafeController::class, 'show']);
+Route::get('/super-safe/logs', [\App\Http\Controllers\SuperSafeController::class, 'logs']);
+Route::post('/super-safe/adjust', [\App\Http\Controllers\SuperSafeController::class, 'adjust']);
+Route::post('/super-safe/transfer-to-office', [\App\Http\Controllers\SuperSafeController::class, 'transferToOffice']);
+Route::post('/super-safe/transfer-from-office', [\App\Http\Controllers\SuperSafeController::class, 'transferFromOffice']);
+
+// سجل حركات الصناديق (للأدمن والمحاسب)
+Route::get('/safe-logs', [\App\Http\Controllers\SafeLogController::class, 'index']);
+
+
+
     // جلب قائمة الموظفين (Users)
     Route::post('/safes/adjust', [SafeActionController::class, 'adjust']);
     Route::post('/safes/transfer', [SafeActionController::class, 'transfer']);
@@ -116,7 +128,9 @@ Route::get('/agent/safe', [MainSafeController::class, 'agentSafe']);
     Route::get('/agents', [\App\Http\Controllers\AuthController::class, 'getAgents']);
 
     // 3. العملات
+
     Route::put('/currencies/update-price/{identifier}', [CurrencyController::class, 'updatePrice']);
+    Route::put('/currencies/update-main-price/{identifier}', [CurrencyController::class, 'updateMainPrice']);
 Route::get('/main-safes', [MainSafeController::class, 'index']);
     // 4. الحوالات (Transfers)
     Route::get('/transfers', [TransferController::class, 'index']);
