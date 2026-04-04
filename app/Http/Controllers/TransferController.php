@@ -20,26 +20,9 @@ class TransferController extends Controller
     $user = Auth::user();
     $query = Transfer::query();
 
-<<<<<<< HEAD
-       
-
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        }
-
-        $transfers = $query->with(['sender', 'currency', 'sendCurrency','destinationOffice'])->where('destination_office_id', $user->office_id)
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        return response()->json([
-            'status' => 'success',
-            'data' => $transfers
-        ], 200);
-=======
     // فلترة حسب الحالة إذا تم إرسالها في الطلب
     if ($request->has('status')) {
         $query->where('status', $request->status);
->>>>>>> 45240950f9b3715ca347a15f75fd1ffbe6cbc5c3
     }
 
     // جلب العلاقات (Relations)
