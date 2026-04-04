@@ -135,13 +135,13 @@ $officeSafe = OfficeSafe::where('office_id', $validated['office_id'])
             // ── 1. تحديث trading_safe ─────────────────────────────────────
             //    balance_sy لا يتغير هنا — الليرات الواردة تذهب لـ office_safe
            $safe->update([
-    'balance'    => $newBalance,
-    'cost'       => $newBalance == 0 ? 0 : $costAtTime,
+           'balance'    => $newBalance,
+           'cost'       => $newBalance == 0 ? 0 : $costAtTime,
 ]);
             // ── 2. office_safe.balance_sy += قيمة البيع كاملة ────────────
             $officeSafe = OfficeSafe::where('office_id', $validated['office_id'])
                 ->lockForUpdate()->firstOrFail();
-            $officeSafe->increment('balance_sy', $sellValueSy);
+            $officeSafe->increment('balance_sy', $sellValueSy-$profit);
 
             // ── 3. profit_safe.profit_trade += الربح فقط ─────────────────
             $profitSafe = ProfitSafe::firstOrCreate(
