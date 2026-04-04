@@ -16,25 +16,32 @@ use Illuminate\Support\Facades\Log;
 class TransferController extends Controller
 {
     public function index(Request $request)
-    {
-        $user = Auth::user();
-        $query = Transfer::query();
+{
+    $user = Auth::user();
+    $query = Transfer::query();
 
-       
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        }
-
-        $transfers = $query->with(['sender', 'currency', 'sendCurrency','destinationOffice'])->where('destination_office_id', $user->office_id)
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        return response()->json([
-            'status' => 'success',
-            'data' => $transfers
-        ], 200);
+    // فلترة حسب الحالة إذا تم إرسالها في الطلب
+    if ($request->has('status')) {
+        $query->where('status', $request->status);
     }
 
+    // جلب العلاقات (Relations)
+    $query->with(['sender', 'currency', 'sendCurrency', 'destinationOffice']);
+
+    // التحقق من صلاحية المستخدم
+    // إذا لم يكن "super_admin"، نعرض له فقط الحوالات الخاصة بمكتبه
+    if ($user->role !== 'super_admin') {
+        $query->where('destination_office_id', $user->office_id);
+    }
+
+    // ترتيب وجلب البيانات
+    $transfers = $query->orderBy('created_at', 'desc')->get();
+
+    return response()->json([
+        'status' => 'success',
+        'data' => $transfers
+    ], 200);
+}
     /**
      * إنشاء حوالة جديدة (مخصصة للمستخدم/الزبون)
      */
@@ -137,6 +144,7 @@ class TransferController extends Controller
 
         if ($id) {
             $query->where('transfer_id', $id);
+            $query->where('destination_office_id', $user->office_id);
         } else {
             $query->take(200);
         }
