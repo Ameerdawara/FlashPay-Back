@@ -29,7 +29,7 @@ class TransferController extends Controller
             $query->where('status', $request->status);
         }
 
-        $transfers = $query->with(['sender', 'currency', 'sendCurrency'])
+        $transfers = $query->with(['sender', 'currency', 'sendCurrency','destinationOffice'])
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -225,12 +225,12 @@ class TransferController extends Controller
             ->first();
 
         if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
-        
+
         $officeSafe->decrement('balance', $transfer->amount_in_usd);
 
         // 2. حساب الربح بناءً على فرق سعر العملة
         $currency = \App\Models\Currency::find($transfer->send_currency_id);
-        
+
         if ($currency) {
             // حساب الفرق بين سعر البيع (price) وسعر التكلفة (main_price)
             $priceDiff = (float)$currency->price - (float)$currency->main_price;

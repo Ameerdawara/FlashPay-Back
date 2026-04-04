@@ -20,7 +20,8 @@ class CurrencyController extends Controller
             'name'  => 'required|string|max:255',
             'code'  => 'required|string|max:10|unique:currencies,code',
             'price' => 'nullable|numeric' // غيرناها لـ numeric لتناسب الحسابات
-        ]);
+             ,'main_price' => 'nullable|numeric',
+            ]);
 
         $currency = Currency::create($validated);
         return response()->json($currency, 201);
@@ -90,13 +91,34 @@ class CurrencyController extends Controller
             'data' => $currency
         ], 200);
     }
+public function updateMainPrice(Request $request, $identifier)
+    {
+        $request->validate([
+            'main_price' => 'required|numeric'
+        ]);
 
+        $currency = Currency::where('id', $identifier)
+            ->orWhere('code', $identifier)
+            ->first();
+
+        if (!$currency) {
+            return response()->json(['status' => 'error', 'message' => 'Currency not found'], 404);
+        }
+
+        $currency->update(['main_price' => $request->main_price]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Main price for {$currency->code} updated successfully",
+            'data' => $currency
+        ], 200);
+    }
     /**
      * تحديث شرائح الأسعار (خاص بالسوبر أدمن)
      */
     public function updateRates(Request $request, $id)
     {
-        
+
         if ($request->user()->role !== 'super_admin') {
             return response()->json(['message' => 'غير مصرح لك'], 403);
         }

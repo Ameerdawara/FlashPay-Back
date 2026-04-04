@@ -21,6 +21,8 @@ class InternalTransferController extends Controller
             'status' => 'success',
             'data' => $query->get()
         ]);
+
+
     }
 
     // إنشاء حوالة داخلية جديدة
@@ -41,7 +43,17 @@ class InternalTransferController extends Controller
         ]);
 
         $transfer = InternalTransfer::create($request->all());
+           if (!empty($validated['commission']) && $validated['commission'] > 0) {
+        $officeId = $validated['office_id'] ?? auth()->user()->office_id;
 
+        if ($officeId) {
+            $profitSafe = \App\Models\ProfitSafe::firstOrCreate(
+                ['office_id' => $officeId],
+                ['profit_trade' => 0, 'profit_main' => 0]
+            );
+            $profitSafe->increment('profit_main', $validated['commission']);
+        }
+    }
         return response()->json([
             'status'  => 'success',
             'message' => 'تم إنشاء الحوالة الداخلية بنجاح',

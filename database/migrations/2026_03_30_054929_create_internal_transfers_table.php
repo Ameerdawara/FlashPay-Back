@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('destination_province');
             $table->string('receiver_phone')->nullable();
             $table->decimal('amount', 15, 2);
-            $table->decimal('commission', 15, 2)->default(0.00);
+            $table->decimal('commission', 15, 4 )->default(0.00);
             $table->string('currency', 10)->default('SYP');            // العملة
             $table->enum('fee_payer', ['sender', 'receiver'])->default('sender'); // من يدفع الرسوم
             $table->boolean('is_paid')->default(false);
