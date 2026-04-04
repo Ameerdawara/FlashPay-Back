@@ -6,17 +6,29 @@ use App\Models\OfficeSafe;
 use App\Models\TradingSafe;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class OfficeSafeController extends Controller
 {
+    private function logAction(array $data): void
+    {
+        try {
+            DB::table('safe_action_logs')->insert(array_merge([
+                'created_at' => now(),
+                'updated_at' => now(),
+            ], $data));
+        } catch (\Exception $e) {
+            // الجدول غير موجود بعد — نتجاهل الخطأ
+        }
+    }
+
     /**
      * POST /offices/{officeId}/safe
      * body: { amount, type: deposit|withdraw, currency: usd|sy }
      *
-     * منطق الليرة السورية:
-     *   إيداع  SYP → office_safe.balance_sy += X  &&  trading_safe.balance_sy += X
-     *   سحب    SYP → office_safe.balance_sy -= X  &&  trading_safe.balance_sy -= X
-     *   USD        → office_safe.balance فقط
+     * إيداع SYP → office_safe.balance_sy += X  &&  trading_safe.balance_sy += X
+     * سحب   SYP → office_safe.balance_sy -= X  &&  trading_safe.balance_sy -= X
+     * USD        → office_safe.balance فقط
      */
     public function updateBalance(Request $request, $officeId)
     {
@@ -29,8 +41,9 @@ class OfficeSafeController extends Controller
         $amount    = abs($validated['amount']);
         $currency  = $validated['currency'] ?? 'usd';
         $isDeposit = $validated['type'] === 'deposit';
+        $user      = Auth::user();
 
-        return DB::transaction(function () use ($officeId, $amount, $currency, $isDeposit) {
+        return DB::transaction(function () use ($officeId, $amount, $currency, $isDeposit, $user) {
 
             $officeSafe = OfficeSafe::where('office_id', $officeId)
                 ->lockForUpdate()->first();
@@ -48,6 +61,18 @@ class OfficeSafeController extends Controller
                     ? $officeSafe->increment('balance', $amount)
                     : $officeSafe->decrement('balance', $amount);
 
+                $this->logAction([
+                    'office_id'        => $officeId,
+                    'safe_type'        => 'office_safe',
+                    'action_type'      => $isDeposit ? 'deposit' : 'withdraw',
+                    'currency'         => 'USD',
+                    'amount'           => $amount,
+                    'description'      => ($isDeposit ? 'إيداع دولار' : 'سحب دولار') . ' في خزنة المكتب',
+                    'performed_by'     => $user->id ?? null,
+                    'balance_after'    => $officeSafe->fresh()->balance,
+                    'balance_sy_after' => $officeSafe->fresh()->balance_sy,
+                ]);
+
                 return response()->json([
                     'status'      => 'success',
                     'new_balance' => $officeSafe->fresh()->balance,
@@ -61,17 +86,25 @@ class OfficeSafeController extends Controller
                 return response()->json(['message' => 'رصيد الليرة السورية في الخزنة غير كافٍ!'], 400);
             }
 
-            // 1. تحديث office_safe.balance_sy
             $isDeposit
                 ? $officeSafe->increment('balance_sy', $amount)
                 : $officeSafe->decrement('balance_sy', $amount);
 
-            // 2. مرآة فورية على trading_safe.balance_sy
             $tradingSafe = TradingSafe::where('office_id', $officeId)
                 ->where('currency_id', 1)
                 ->lockForUpdate()->first();
 
-          
+            $this->logAction([
+                'office_id'        => $officeId,
+                'safe_type'        => 'office_safe',
+                'action_type'      => $isDeposit ? 'deposit' : 'withdraw',
+                'currency'         => 'SYP',
+                'amount'           => $amount,
+                'description'      => ($isDeposit ? 'إيداع ليرة سورية' : 'سحب ليرة سورية') . ' في خزنة المكتب',
+                'performed_by'     => $user->id ?? null,
+                'balance_after'    => $officeSafe->fresh()->balance,
+                'balance_sy_after' => $officeSafe->fresh()->balance_sy,
+            ]);
 
             return response()->json([
                 'status'             => 'success',

@@ -26,9 +26,11 @@ class InternalTransferController extends Controller
     }
 
     // إنشاء حوالة داخلية جديدة
+   // إنشاء حوالة داخلية جديدة
     public function store(Request $request)
     {
-        $request->validate([
+        // 1. التحقق من البيانات المرسلة
+        $validated = $request->validate([
             'office_id'      => 'nullable|exists:offices,id',
             'sender_name'    => 'required|string|max:255',
             'receiver_name'  => 'required|string|max:255',
@@ -36,31 +38,45 @@ class InternalTransferController extends Controller
             'destination_province' => 'required|string|max:255',
             'amount'         => 'required|numeric|min:0.01',
             'commission'     => 'required|numeric|min:0',
-            'currency'       => 'required|string|max:10',
+            'currency'       => 'required|string|max:10', // SYP أو USD
             'fee_payer'      => 'required|in:sender,receiver',
             'is_paid'        => 'boolean',
             'transfer_date'  => 'required|date',
         ]);
 
-        $transfer = InternalTransfer::create($request->all());
-           if (!empty($validated['commission']) && $validated['commission'] > 0) {
-        $officeId = $validated['office_id'] ?? auth()->user()->office_id;
+        // 2. إنشاء الحوالة
+        $transfer = InternalTransfer::create($validated);
 
-        if ($officeId) {
-            $profitSafe = \App\Models\ProfitSafe::firstOrCreate(
-                ['office_id' => $officeId],
-                ['profit_trade' => 0, 'profit_main' => 0]
-            );
-            $profitSafe->increment('profit_main', $validated['commission']);
+        // 3. معالجة الأرباح إذا كان دافع الرسوم هو المرسل
+        if ($validated['fee_payer'] === 'sender' && !empty($validated['commission']) && $validated['commission'] > 0) {
+
+            $officeId = $validated['office_id'] ?? ($request->user() ? $request->user()->office_id : null);
+
+            if ($officeId) {
+                $profitSafe = \App\Models\ProfitSafe::firstOrCreate(
+                    ['office_id' => $officeId],
+                    ['profit_trade' => 0, 'profit_main' => 0]
+                );
+
+                // تحديد الحقل المستهدف بناءً على العملة
+                // افترضت هنا أن رمز الدولار هو 'USD' أو '$' والليرة 'SYP'
+                // يمكنك تعديل الرموز حسب ما هو مخزن عندك في قاعدة البيانات
+                if (in_array(strtoupper($validated['currency']), ['USD', '$'])) {
+                    // إذا كان دولار -> أرباح رئيسية
+                    $profitSafe->increment('profit_main', $validated['commission']);
+                } else {
+                    // أي عملة أخرى (سوري) -> أرباح التداول
+                    $profitSafe->increment('profit_trade', $validated['commission']);
+                }
+            }
         }
-    }
+
         return response()->json([
             'status'  => 'success',
-            'message' => 'تم إنشاء الحوالة الداخلية بنجاح',
+            'message' => 'تم إنشاء الحوالة وتوجيه الأرباح بنجاح',
             'data'    => $transfer
         ], 201);
     }
-
     // تغيير حالة الدفع (من غير مدفوع إلى مدفوع والعكس)
     public function togglePaidStatus($id)
     {

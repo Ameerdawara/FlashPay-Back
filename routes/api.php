@@ -15,6 +15,7 @@ use App\Http\Controllers\TradingSafeController;
 use App\Http\Controllers\OfficeSafeController;
 use App\Http\Controllers\InternalTransferController;
 use App\Http\Controllers\ProfitSafeController;
+use App\Http\Controllers\SafeLogController;
 
 use Illuminate\Http\Request;
 
@@ -53,10 +54,13 @@ Route::get('/super-safe/logs', [\App\Http\Controllers\SuperSafeController::class
 Route::post('/super-safe/adjust', [\App\Http\Controllers\SuperSafeController::class, 'adjust']);
 Route::post('/super-safe/transfer-to-office', [\App\Http\Controllers\SuperSafeController::class, 'transferToOffice']);
 Route::post('/super-safe/transfer-from-office', [\App\Http\Controllers\SuperSafeController::class, 'transferFromOffice']);
+Route::post('/safes/profit/adjust', [ProfitSafeController::class, 'adjustProfit']);
+Route::get('/safe-logs', [SafeLogController::class, 'index']);
 
 // سجل حركات الصناديق (للأدمن والمحاسب)
 Route::get('/safe-logs', [\App\Http\Controllers\SafeLogController::class, 'index']);
 
+Route::post('/safes/transfer-profit', [ProfitSafeController::class, 'transferProfitToOffice']);
 
 
     // جلب قائمة الموظفين (Users)

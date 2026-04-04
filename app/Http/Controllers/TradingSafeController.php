@@ -142,7 +142,11 @@ $officeSafe = OfficeSafe::where('office_id', $validated['office_id'])
             $officeSafe = OfficeSafe::where('office_id', $validated['office_id'])
                 ->lockForUpdate()->firstOrFail();
             $officeSafe->increment('balance_sy', $sellValueSy-$profit);
+<<<<<<< HEAD
                   
+=======
+
+>>>>>>> 817ffc7b85c8e7a1eda5c56e6743b0d05117c01f
             // ── 3. profit_safe.profit_trade += الربح فقط ─────────────────
             $profitSafe = ProfitSafe::firstOrCreate(
                 ['office_id' => $validated['office_id']],
