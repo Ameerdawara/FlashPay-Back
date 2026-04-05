@@ -36,7 +36,7 @@ class Office extends Model
     }
     public function officeSafe()
     {
-        return $this->hasOne(OfficeSafe::class);
+        return $this->hasone(OfficeSafe::class);
     }
     public function safe()
     {

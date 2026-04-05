@@ -16,7 +16,7 @@ use App\Http\Controllers\OfficeSafeController;
 use App\Http\Controllers\InternalTransferController;
 use App\Http\Controllers\ProfitSafeController;
 use App\Http\Controllers\SafeLogController;
-
+use App\Http\Controllers\BankTransferController;
 use Illuminate\Http\Request;
 
 use Illuminate\Support\Facades\Route;
@@ -61,7 +61,7 @@ Route::get('/safe-logs', [SafeLogController::class, 'index']);
 Route::get('/safe-logs', [\App\Http\Controllers\SafeLogController::class, 'index']);
 
 Route::post('/safes/transfer-profit', [ProfitSafeController::class, 'transferProfitToOffice']);
-
+Route::post('/agent/transfers', [\App\Http\Controllers\TransferController::class, 'storeAgentTransfer'])->middleware('auth:sanctum');
 
     // جلب قائمة الموظفين (Users)
     Route::post('/safes/adjust', [SafeActionController::class, 'adjust']);
@@ -153,6 +153,18 @@ Route::get('/main-safes', [MainSafeController::class, 'index']);
         Route::post('/buy', [TradingSafeController::class, 'buy']);
         Route::post('/sell', [TradingSafeController::class, 'sell']);
     });
+    Route::middleware('auth:sanctum')->group(function () {
+
+    // الوكيل: إنشاء طلب + عرض طلباته
+    // super_admin: عرض جميع الطلبات
+    Route::get('/bank-transfers', [BankTransferController::class, 'index']);
+    Route::post('/bank-transfers', [BankTransferController::class, 'store']);
+    Route::get('/bank-transfers/{id}', [BankTransferController::class, 'show']);
+
+    // super_admin فقط
+    Route::patch('/bank-transfers/{id}/approve', [BankTransferController::class, 'approve']);
+    Route::patch('/bank-transfers/{id}/reject', [BankTransferController::class, 'reject']);
+});
     // المحادثات
     Route::get('/conversations', [ConversationController::class, 'index']);
     Route::post('/conversations/start', [ConversationController::class, 'startConversation']);
