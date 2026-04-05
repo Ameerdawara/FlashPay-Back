@@ -13,7 +13,7 @@ class OfficeController extends Controller
    public function index()
 {
     // أضفنا 'safe' هنا لتظهر في قائمة المكاتب
-    $offices = Office::with(['city', 'mainSafe', 'safe'])->get();
+    $offices = Office::with(['city', 'mainSafe', 'safe','officeSafe'])->get();
     return response()->json(['status' => 'success', 'data' => $offices]);
 }
 // 4. تعديل مكتب (Update)

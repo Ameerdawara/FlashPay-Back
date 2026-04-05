@@ -34,6 +34,10 @@ class Office extends Model
     {
         return $this->morphOne(MainSafe::class, 'owner');
     }
+    public function officeSafe()
+    {
+        return $this->hasOne(OfficeSafe::class);
+    }
     public function safe()
     {
         return $this->hasOne(OfficeSafe::class);
