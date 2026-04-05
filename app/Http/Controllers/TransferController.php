@@ -283,7 +283,7 @@ class TransferController extends Controller
             }
 
             // الكاشير يسلم المبلغ وينهي الحوالة
-          elseif (in_array($user->role, ['cashier', 'accountant'])) {
+        elseif (in_array($user->role, ['cashier', 'accountant'])) {
     if ($request->status === 'completed' && $transfer->status === 'ready') {
         // 1. تحديث رصيد الصندوق الرئيسي للمكتب
         $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
@@ -294,19 +294,31 @@ class TransferController extends Controller
 
         $officeSafe->decrement('balance', $transfer->amount_in_usd);
 
-        // 2. حساب الربح بناءً على فرق سعر العملة
+        // 2. حساب الربح بناءً على "الشريحة" أو "السعر الافتراضي"
         $currency = \App\Models\Currency::find($transfer->send_currency_id);
 
         if ($currency) {
-            // حساب الفرق بين سعر البيع (price) وسعر التكلفة (main_price)
-            $priceDiff = (float)$currency->price - (float)$currency->main_price;
-            $profit = $transfer->amount * $priceDiff;
+            $amount = $transfer->amount;
+
+            // البحث عن الشريحة المناسبة لهذا المبلغ (نفس منطق getRate)
+            $tier = \App\Models\CurrencyRate::where('currency_id', $currency->id)
+                ->where('min_amount', '<=', $amount)
+                ->where(function ($query) use ($amount) {
+                    $query->where('max_amount', '>=', $amount)
+                          ->orWhereNull('max_amount');
+                })->first();
+
+            // تحديد سعر البيع المطبق: إذا وجدت شريحة نستخدمها، وإلا نستخدم السعر الافتراضي
+            $appliedRate = $tier ? (float)$tier->rate : (float)$currency->price;
+
+            // حساب الربح: (السعر المطبق - سعر التكلفة الأساسي) * المبلغ
+            $priceDiff = $appliedRate - (float)$currency->main_price;
+            $profit = $amount * $priceDiff;
 
             // تخزين الربح في حقل العمولات الخاص بالحوالة
             $transfer->fee = $profit;
 
             // 3. ترحيل الربح إلى جدول أرباح المكاتب (ProfitSafe)
-            // نستخدم updateOrCreate لضمان وجود سجل للمكتب، ثم نزيد القيمة
             $profitSafe = \App\Models\ProfitSafe::firstOrCreate(
                 ['office_id' => $transfer->destination_office_id]
             );
@@ -324,7 +336,6 @@ class TransferController extends Controller
 
     $transfer->status = $request->status;
 }
-
             $transfer->save();
             // ✅ إضافة: إرسال إشعار للزبون عند اكتمال الحوالة
             // داخل TransferController.php في دالة update
