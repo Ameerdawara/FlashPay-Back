@@ -86,7 +86,69 @@ class TransferController extends Controller
             'data' => $transfer
         ], 201);
     }
+/**
+     * إنشاء حوالة جديدة (مخصصة للوكيل)
+     * الأموال تذهب فوراً إلى super_safe والحالة تكون ready
+     */
+    public function storeAgentTransfer(Request $request)
+    {
+        // 1. التحقق من صحة البيانات
+        $validated = $request->validate([
+            'amount'                 => 'required|numeric|min:1',
+            'currency_id'            => 'required|exists:currencies,id',
+            'send_currency_id'       => 'required|exists:currencies,id',
+            'receiver_name'          => 'required|string|max:255',
+            'receiver_phone'         => 'required|string|max:20',
+            'destination_city'       => 'required|string',
+             'destination_office_id'  => 'required_without:destination_country_id|nullable|exists:offices,id',
+        ]);
 
+        return DB::transaction(function () use ($validated) {
+            $currency = Currency::with('rates')->findOrFail($validated['send_currency_id']);
+            $amountInUsd = $validated['amount'] * $this->getEffectiveRate($currency, $validated['amount']);
+            $trackingCode = 'TRX-' . strtoupper(Str::random(8));
+
+            // 2. إنشاء الحوالة في جدول transfers
+            $transfer = Transfer::create([
+                'tracking_code'          => $trackingCode,
+                'sender_id'              => Auth::id(), // معرّف الوكيل
+                'amount'                 => $validated['amount'],
+                'amount_in_usd'          => $amountInUsd,
+                'currency_id'            => $validated['currency_id'],
+                'send_currency_id'       => $validated['send_currency_id'],
+                'destination_office_id'  => $validated['destination_office_id'] ?? null,
+                'destination_city'       => $validated['destination_city'],
+                'receiver_name'          => $validated['receiver_name'],
+                'receiver_phone'         => $validated['receiver_phone'],
+                'status'                 => 'ready', // تعيين الحالة المطلوبة
+                'fee'                    => 0,
+            ]);
+
+            // 3. تحديث صندوق super_safe
+            $superSafe = \App\Models\SuperSafe::instance()->lockForUpdate()->first() ?? \App\Models\SuperSafe::instance();
+            $balanceBefore = $superSafe->balance;
+
+            // إضافة المبلغ إلى صندوق السوبر
+            $superSafe->increment('balance', $amountInUsd);
+
+            // 4. تسجيل العملية في سجل صندوق السوبر
+            \App\Models\SuperSafeLog::create([
+                'type'           => 'deposit', // إيداع
+                'amount'         => $amountInUsd,
+                'office_id'      => null,
+                'office_name'    => 'وكيل خارجي - ' . Auth::user()->name,
+                'note'           => 'استلام حوالة من وكيل، كود الحوالة: ' . $trackingCode,
+                'balance_before' => $balanceBefore,
+                'balance_after'  => $superSafe->fresh()->balance,
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'تم إنشاء الحوالة وإضافة الأموال للصندوق الرئيسي بنجاح',
+                'data' => $transfer
+            ], 201);
+        });
+    }
     /**
      * تعديل بيانات الحوالة (admin فقط)
      * ملاحظة: تسجيل السجل (History) يتم تلقائياً عبر TransferObserver
