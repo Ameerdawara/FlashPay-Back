@@ -160,7 +160,14 @@ Route::get('/main-safes', [MainSafeController::class, 'index']);
     Route::get('/bank-transfers', [BankTransferController::class, 'index']);
     Route::post('/bank-transfers', [BankTransferController::class, 'store']);
     Route::get('/bank-transfers/{id}', [BankTransferController::class, 'show']);
+    Route::get('/agent/safe', [\App\Http\Controllers\TransferController::class, 'agentSafeDetails']);
 
+// إنشاء حوالة المندوب
+Route::post('/agent/transfers', [\App\Http\Controllers\TransferController::class, 'storeAgentTransfer']);
+
+// تحديث نسبة ربح مندوب معين (super_admin فقط)
+Route::patch('/agent/profit-ratio', [\App\Http\Controllers\TransferController::class, 'updateAgentProfitRatio']);
+ 
     // super_admin فقط
     Route::patch('/bank-transfers/{id}/approve', [BankTransferController::class, 'approve']);
     Route::patch('/bank-transfers/{id}/reject', [BankTransferController::class, 'reject']);
