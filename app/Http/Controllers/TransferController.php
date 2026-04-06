@@ -283,7 +283,7 @@ class TransferController extends Controller
             }
 
             // الكاشير يسلم المبلغ وينهي الحوالة
-        elseif (in_array($user->role, ['cashier', 'accountant'])) {
+      elseif (in_array($user->role, ['cashier', 'accountant'])) {
     if ($request->status === 'completed' && $transfer->status === 'ready') {
         // 1. تحديث رصيد الصندوق الرئيسي للمكتب
         $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
@@ -300,7 +300,7 @@ class TransferController extends Controller
         if ($currency) {
             $amount = $transfer->amount;
 
-            // البحث عن الشريحة المناسبة لهذا المبلغ (نفس منطق getRate)
+            // البحث عن الشريحة المناسبة لهذا المبلغ
             $tier = \App\Models\CurrencyRate::where('currency_id', $currency->id)
                 ->where('min_amount', '<=', $amount)
                 ->where(function ($query) use ($amount) {
@@ -308,14 +308,14 @@ class TransferController extends Controller
                           ->orWhereNull('max_amount');
                 })->first();
 
-            // تحديد سعر البيع المطبق: إذا وجدت شريحة نستخدمها، وإلا نستخدم السعر الافتراضي
+            // تحديد سعر البيع المطبق
             $appliedRate = $tier ? (float)$tier->rate : (float)$currency->price;
-
-            // حساب الربح: (السعر المطبق - سعر التكلفة الأساسي) * المبلغ
-            $priceDiff = $appliedRate - (float)$currency->main_price;
+            
+            $priceDiff = abs($appliedRate - (float)$currency->main_price);
+            
             $profit = $amount * $priceDiff;
 
-            // تخزين الربح في حقل العمولات الخاص بالحوالة
+            // تخزين الربح في حقل العمولات fee
             $transfer->fee = $profit;
 
             // 3. ترحيل الربح إلى جدول أرباح المكاتب (ProfitSafe)
@@ -328,7 +328,7 @@ class TransferController extends Controller
         }
     }
 
-    // رفع صورة هوية المستلم إن وجدت
+    // رفع صورة الهوية
     if ($request->hasFile('receiver_id_image')) {
         $path = $request->file('receiver_id_image')->store('receipts', 'public');
         $transfer->receiver_id_image = $path;
