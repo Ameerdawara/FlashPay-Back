@@ -24,7 +24,7 @@ class Transfer extends Model
         'receiver_phone',
         'receiver_id_image',
         'status',
-        'amount_in_usd'
+        'amount_in_usd',
     ];
     public function sender()
     {
