@@ -247,28 +247,104 @@ class TransferController extends Controller
     // ─────────────────────────────────────────────────────────────────────
     public function update(Request $request, $id)
     {
-        $request->validate([
-            'status' => 'required|in:pending,waiting,ready,approved,completed,rejected',
-        ]);
+        $transfer = Transfer::findOrFail($id);
+        $user = Auth::user();
 
-        return DB::transaction(function () use ($request, $id) {
-            $transfer = Transfer::with(['sender', 'currency'])->lockForUpdate()->findOrFail($id);
+        // 1. التحقق من الصلاحيات والبيانات المرسلة حسب دور الموظف
+        if (in_array($user->role, ['admin', 'super_admin'])) {
+            $request->validate([
+                'status' => 'required|in:ready',
+                'fee'    => 'required|numeric|min:0'
+            ]);
+        } elseif (in_array($user->role, ['cashier', 'accountant'])) {
+            $request->validate([
+                'status'            => 'required|in:completed',
+                'receiver_id_image' => 'required|image|mimes:jpeg,png,jpg|max:4096'
+            ]);
+        } else {
+            return response()->json(['message' => 'ليس لديك صلاحية لتحديث الحوالة'], 403);
+        }
 
-            // احتساب fee عند الموافقة النهائية
-            if ($request->status === 'approved' || $request->status === 'completed') {
-                $currency = \App\Models\Currency::find($transfer->send_currency_id);
+        // 2. تطبيق التعديلات داخل Transaction
+        return DB::transaction(function () use ($request, $transfer, $user) {
 
-                if ($currency) {
-                    $amount      = $transfer->amount;
-                    $tier        = \App\Models\CurrencyRate::where('currency_id', $currency->id)
-                        ->where('min_amount', '<=', $amount)
-                        ->where(function ($q) use ($amount) {
-                            $q->where('max_amount', '>=', $amount)->orWhereNull('max_amount');
-                        })->first();
+            // الإدمن يوافق على الحوالة الواردة ويجهزها للاستلام
+            if (in_array($user->role, ['admin', 'super_admin'])) {
+                if ($request->status === 'ready' && $transfer->status === 'waiting') {
+                    // ✅ إضافة: إرسال إشعار للزبون بأن الحوالة جاهزة
+                    $customer = \App\Models\User::find($transfer->sender_id);
+                    if ($customer && $customer->fcm_token) {
+                        $fcmService = new \App\Services\FcmService();
+                        $fcmService->sendNotification(
+                            $customer->fcm_token,
+                            "حوالتك جاهزة! ✅",
+                            "طلبك للحوالة رقم ({$transfer->tracking_code}) أصبح جاهزاً للاستلام.",
+                            [
+                                'transfer_id' => (string)$transfer->id,
+                                'type'        => 'transfer_ready',
+                                'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
+                            ]
+                        );
+                    }
 
-                    $appliedRate = $tier ? (float) $tier->rate : (float) $currency->price;
-                    $priceDiff   = $appliedRate - (float) $currency->main_price;
-                    $profit      = $amount * $priceDiff;
+
+                    // إرسال رسالة الواتساب
+                    $phone = $transfer->receiver_phone;
+                    $amount = $transfer->amount;
+                    $currency = $transfer->currency->code ?? '';
+                    $whatsappMessage = "مرحباً المستلم الكريم، نعلمك أن حوالتك رقم ({$transfer->tracking_code}) بقيمة $amount $currency أصبحت جاهزة للاستلام الآن من مكتبنا.";
+
+                    try {
+                        Http::post('رابط_الـ_API_الخاص_بمزود_الواتساب', [
+                            'token' => 'YOUR_API_TOKEN',
+                            'to'    => $phone,
+                            'body'  => $whatsappMessage
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::error('فشل إرسال رسالة واتساب للحوالة ' . $transfer->id . ' السبب: ' . $e->getMessage());
+                    }
+                }
+
+
+                $transfer->status = $request->status;
+                $transfer->fee = $request->fee;
+            }
+
+            // الكاشير يسلم المبلغ وينهي الحوالة
+      elseif (in_array($user->role, ['cashier', 'accountant'])) {
+    if ($request->status === 'completed' && $transfer->status === 'ready') {
+        // 1. تحديث رصيد الصندوق الرئيسي للمكتب
+        $officeSafe = MainSafe::where('owner_id', $transfer->destination_office_id)
+            ->where('owner_type', 'App\Models\Office')
+            ->first();
+
+        if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
+
+        $officeSafe->decrement('balance', $transfer->amount_in_usd);
+
+        // 2. حساب الربح بناءً على "الشريحة" أو "السعر الافتراضي"
+        $currency = \App\Models\Currency::find($transfer->send_currency_id);
+
+        if ($currency) {
+            $amount = $transfer->amount;
+
+            // البحث عن الشريحة المناسبة لهذا المبلغ
+            $tier = \App\Models\CurrencyRate::where('currency_id', $currency->id)
+                ->where('min_amount', '<=', $amount)
+                ->where(function ($query) use ($amount) {
+                    $query->where('max_amount', '>=', $amount)
+                          ->orWhereNull('max_amount');
+                })->first();
+
+            // تحديد سعر البيع المطبق
+            $appliedRate = $tier ? (float)$tier->rate : (float)$currency->price;
+            
+            $priceDiff = abs($appliedRate - (float)$currency->main_price);
+            
+            $profit = $amount * $priceDiff;
+
+            // تخزين الربح في حقل العمولات fee
+            $transfer->fee = $profit;
 
                     $transfer->fee = $profit;
 
@@ -279,10 +355,11 @@ class TransferController extends Controller
                 }
             }
 
-            if ($request->hasFile('receiver_id_image')) {
-                $path = $request->file('receiver_id_image')->store('receipts', 'public');
-                $transfer->receiver_id_image = $path;
-            }
+    // رفع صورة الهوية
+    if ($request->hasFile('receiver_id_image')) {
+        $path = $request->file('receiver_id_image')->store('receipts', 'public');
+        $transfer->receiver_id_image = $path;
+    }
 
             $transfer->status = $request->status;
             $transfer->save();
