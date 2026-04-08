@@ -24,7 +24,7 @@ class TransferController extends Controller
             $query->where('status', $request->status);
         }
 
-        $query->with(['sender', 'currency', 'sendCurrency', 'destinationOffice']);
+        $query->with(['sender.country', 'currency', 'sendCurrency', 'destinationOffice']);
 
         if ($user->role !== 'super_admin') {
             $query->where('destination_office_id', $user->office_id);
@@ -61,7 +61,7 @@ class TransferController extends Controller
 
         $transfer = Transfer::create([
             'tracking_code'          => $trackingCode,
-            'sender_id'              => Auth::id(),
+            'sender_id'              => $request->input('sender_id', Auth::id()),
             'amount'                 => $validated['amount'],
             'amount_in_usd'          => $amountInUsd,
             'currency_id'            => $validated['currency_id'],
@@ -71,7 +71,7 @@ class TransferController extends Controller
             'destination_city'       => $validated['destination_city'] ?? null,
             'receiver_name'          => $validated['receiver_name'],
             'receiver_phone'         => $validated['receiver_phone'],
-            'status'                 => 'waiting',
+            'status'                 => $request->input('status', 'waiting'),
             'fee'                    => 0,
             'receiver_id_image'      => null,
         ]);

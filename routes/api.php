@@ -18,6 +18,7 @@ use App\Http\Controllers\ProfitSafeController;
 use App\Http\Controllers\SafeLogController;
 use App\Http\Controllers\BankTransferController;
 use Illuminate\Http\Request;
+use App\Http\Controllers\MonthlyClosingController;
 
 use Illuminate\Support\Facades\Route;
 use App\Models\User;
@@ -167,10 +168,24 @@ Route::post('/agent/transfers', [\App\Http\Controllers\TransferController::class
 
 // تحديث نسبة ربح مندوب معين (super_admin فقط)
 Route::patch('/agent/profit-ratio', [\App\Http\Controllers\TransferController::class, 'updateAgentProfitRatio']);
- 
+
     // super_admin فقط
     Route::patch('/bank-transfers/{id}/approve', [BankTransferController::class, 'approve']);
     Route::patch('/bank-transfers/{id}/reject', [BankTransferController::class, 'reject']);
+});
+Route::prefix('monthly-closing')->group(function () {
+
+    // GET  /monthly-closing           — سجل الإقفالات (سوبر أدمن + محاسب + أدمن)
+    Route::get('/',         [MonthlyClosingController::class, 'index']);
+
+    // POST /monthly-closing           — تنفيذ إقفال جديد (سوبر أدمن فقط)
+    Route::post('/',        [MonthlyClosingController::class, 'store']);
+
+    // GET  /monthly-closing/{id}/safes — لقطة الصناديق لإقفال معين
+    Route::get('/{id}/safes', [MonthlyClosingController::class, 'safeSnapshots']);
+
+    // GET  /monthly-closing/archived  — الحوالات المؤرشفة (للمراجعة)
+    Route::get('/archived', [MonthlyClosingController::class, 'archivedTransfers']);
 });
     // المحادثات
     Route::get('/conversations', [ConversationController::class, 'index']);
