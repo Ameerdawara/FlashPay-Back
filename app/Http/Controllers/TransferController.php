@@ -416,7 +416,7 @@ class TransferController extends Controller
         return response()->json([
             'status'  => 'success',
             'message' => 'تم تحديث الحوالة وتعديل الصناديق بنجاح',
-            'data'    => $transfer->load(['sender', 'currency']),
+            'data'    => $transfer->load(['sender', 'currency','sender.country']),
         ], 200);
     });
 }
