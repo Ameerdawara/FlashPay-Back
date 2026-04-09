@@ -132,6 +132,7 @@ class MonthlyClosingController extends Controller
         return DB::transaction(function () use ($month, $officeId, $validated, $performer) {
 
             // ── 1. أرشفة الحوالات المكتملة للشهر المحدد ──────────────────
+          // ── 1. جلب الحوالات المكتملة للشهر المحدد وحساب المجاميع ──────────────────
             $transfersQuery = DB::table('transfers')
                 ->where('status', 'completed')
                 ->whereRaw("DATE_FORMAT(created_at, '%Y-%m') = ?", [$month]);
@@ -140,19 +141,24 @@ class MonthlyClosingController extends Controller
                 $transfersQuery->where('destination_office_id', $officeId);
             }
 
-            $archivedCount = $transfersQuery->count();
+            // حساب العدد والمبالغ والأرباح قبل تغيير الحالة
+            $archivedCount  = $transfersQuery->count();
+            $totalAmountUsd = $transfersQuery->sum('amount_in_usd');
+            $totalProfit    = $transfersQuery->sum('fee');
 
-            // نغيّر status → 'archived' (تبقى في DB لكن لا تظهر في index العادي)
+            // نغيّر status → 'archived' (تختفي من الواجهة العادية وتعتبر مقفلة/محذوفة من اليوميات)
             (clone $transfersQuery)->update([
                 'status'     => 'archived',
                 'updated_at' => now(),
             ]);
 
-            // ── 2. تسجيل سجل الإقفال ─────────────────────────────────────
+            // ── 2. تسجيل سجل الإقفال مع المبالغ ─────────────────────────────────────
             $closingId = DB::table('monthly_closings')->insertGetId([
                 'month'                    => $month,
                 'office_id'                => $officeId,
                 'archived_transfers_count' => $archivedCount,
+                'total_amount_usd'         => $totalAmountUsd, // تمت الإضافة
+                'total_profit'             => $totalProfit,    // تمت الإضافة
                 'performed_by'             => $performer->id,
                 'notes'                    => $validated['notes'] ?? null,
                 'created_at'               => now(),
@@ -211,7 +217,7 @@ class MonthlyClosingController extends Controller
     public function archivedTransfers(Request $request)
     {
         $user = Auth::user();
-        if (!in_array($user->role, ['super_admin', 'admin'])) {
+        if (!in_array($user->role, ['super_admin', 'admin','accountant'])) {
             return response()->json(['message' => 'غير مصرح'], 403);
         }
 

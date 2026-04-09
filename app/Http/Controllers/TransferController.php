@@ -16,27 +16,35 @@ use Illuminate\Support\Facades\Log;
 class TransferController extends Controller
 {
     public function index(Request $request)
-    {
-        $user  = Auth::user();
-        $query = Transfer::query();
+{
+    $user  = Auth::user();
+    $query = Transfer::query();
 
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        }
-
-        $query->with(['sender.country', 'currency', 'sendCurrency', 'destinationOffice']);
-
-        if ($user->role !== 'super_admin') {
-            $query->where('destination_office_id', $user->office_id);
-        }
-
-        $transfers = $query->orderBy('created_at', 'desc')->get();
-
-        return response()->json([
-            'status' => 'success',
-            'data'   => $transfers,
-        ], 200);
+    // إذا طلب المستخدم الحوالات المؤرشفة تحديداً
+    if ($request->has('archived') && $request->archived == 1) {
+        $query->where('status', 'archived');
+    } else {
+        // الافتراضي: جلب كل شيء ما عدا المؤرشف لكي لا تزدحم الشاشة
+        $query->where('status', '!=', 'archived');
     }
+
+    if ($request->has('status') && $request->status !== 'archived') {
+        $query->where('status', $request->status);
+    }
+
+    $query->with(['sender.country', 'currency', 'sendCurrency', 'destinationOffice']);
+
+    if ($user->role !== 'super_admin') {
+        $query->where('destination_office_id', $user->office_id);
+    }
+
+    $transfers = $query->orderBy('created_at', 'desc')->get();
+
+    return response()->json([
+        'status' => 'success',
+        'data'   => $transfers,
+    ], 200);
+}
 
     // ─────────────────────────────────────────────────────────────────────
     // إنشاء حوالة عادية (زبون / كاشير)
