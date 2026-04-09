@@ -118,8 +118,8 @@ class TransferController extends Controller
             $amountInUsd   = $amount * $effectiveRate;
 
             // ── حساب الـ fee (ربح الفرق بين سعر البيع وسعر التكلفة) ──
-            $priceDiff = $effectiveRate - (float) ($currency->main_price ?? 0);
-            $totalFee  = max(0, $amount * $priceDiff);
+            // $priceDiff = $effectiveRate - (float) ($currency->main_price ?? 0);
+            // $totalFee  = max(0, $amount * $priceDiff);
 
             // ── صندوق المندوب (main_safe) ──────────────────────────────
             $agentSafe = MainSafe::where('owner_type', 'App\\Models\\User')
@@ -129,8 +129,8 @@ class TransferController extends Controller
 
             // نسبة ربح المندوب من الـ fee
             $agentRatio  = $agentSafe ? (float) $agentSafe->agent_profit_ratio : 0;
-            $agentProfit = $totalFee * ($agentRatio / 100);
-            $superProfit = $totalFee - $agentProfit;
+            $agentProfit = $amountInUsd * ($agentRatio / 100);
+            // $superProfit = $totalFee - $agentProfit;
 
             $trackingCode = 'TRX-' . strtoupper(Str::random(8));
 
@@ -147,25 +147,25 @@ class TransferController extends Controller
                 'receiver_name'         => $validated['receiver_name'],
                 'receiver_phone'        => $validated['receiver_phone'],
                 'status'                => 'ready',
-                'fee'                   => $totalFee,
+                'fee'                   => 0,
             ]);
 
             // ── تحديث super_safe (المبلغ الكامل + حصة السوبر من الربح) ──
-            $superSafe     = \App\Models\SuperSafe::instance()->lockForUpdate()->first()
-                             ?? \App\Models\SuperSafe::instance();
-            $balanceBefore = $superSafe->balance;
+            // $superSafe     = \App\Models\SuperSafe::instance()->lockForUpdate()->first()
+            //                  ?? \App\Models\SuperSafe::instance();
+            // $balanceBefore = $superSafe->balance;
 
-            $superSafe->increment('balance', $amountInUsd+$superProfit);
+            // $superSafe->increment('balance', $amountInUsd+$superProfit);
 
-            \App\Models\SuperSafeLog::create([
-                'type'           => 'deposit',
-                'amount'         => $amountInUsd,
-                'office_id'      => null,
-                'office_name'    => 'وكيل - ' . $agent->name,
-                'note'           => "استلام حوالة وكيل | كود: {$trackingCode} | ربح السوبر: " . number_format($superProfit, 2),
-                'balance_before' => $balanceBefore,
-                'balance_after'  => $superSafe->fresh()->balance,
-            ]);
+            // \App\Models\SuperSafeLog::create([
+            //     'type'           => 'deposit',
+            //     'amount'         => $amountInUsd,
+            //     'office_id'      => null,
+            //     'office_name'    => 'وكيل - ' . $agent->name,
+            //     'note'           => "استلام حوالة وكيل | كود: {$trackingCode} | ربح السوبر: " . number_format($superProfit, 2),
+            //     'balance_before' => $balanceBefore,
+            //     'balance_after'  => $superSafe->fresh()->balance,
+            // ]);
 
             // ── تحديث صندوق المندوب (agent_profit فقط ، المبلغ يبقى في super_safe) ──
             if ($agentSafe && $agentProfit > 0) {
@@ -176,12 +176,7 @@ class TransferController extends Controller
                 'status'       => 'success',
                 'message'      => 'تم إنشاء الحوالة بنجاح',
                 'data'         => $transfer,
-                'fee_details'  => [
-                    'total_fee'    => $totalFee,
-                    'agent_profit' => $agentProfit,
-                    'super_profit' => $superProfit,
-                    'agent_ratio'  => $agentRatio,
-                ],
+
             ], 201);
         });
     }
@@ -327,16 +322,17 @@ class TransferController extends Controller
                 if ($isAgent) {
                     // 1. حالة حوالة الوكيل (Agent)
                     // سحب المبلغ من صندوق السوبر (SuperSafe) بدون المساس بالأرباح (لأنها محسوبة ومضافة مسبقاً)
-                    $superSafe = \App\Models\SuperSafe::instance()->lockForUpdate()->first()
-                                 ?? \App\Models\SuperSafe::instance();
+                   $officeSafe = \App\Models\MainSafe::where('owner_id', $transfer->destination_office_id)
+                        ->where('owner_type', 'App\Models\Office')
+                        ->lockForUpdate()
+                        ->first();
 
-                    if ($superSafe->balance < $transfer->amount_in_usd) {
-                        throw new \Exception("رصيد صندوق السوبر غير كافٍ لتسليم الحوالة");
+                    if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
+                    if ($officeSafe->balance < $transfer->amount_in_usd) {
+                        throw new \Exception("رصيد صندوق المكتب غير كافٍ لتسليم الحوالة");
                     }
 
-                    $balanceBefore = $superSafe->balance;
-                    $superSafe->decrement('balance', $transfer->amount_in_usd);
-
+                    $officeSafe->decrement('balance', $transfer->amount_in_usd);
                     // توثيق عملية السحب من السوبر أدمن (مستحسن لضبط الحسابات)
                     \App\Models\SuperSafeLog::create([
                         'type'           => 'withdraw',
@@ -344,8 +340,7 @@ class TransferController extends Controller
                         'office_id'      => $transfer->destination_office_id,
                         'office_name'    => 'تسليم حوالة وكيل',
                         'note'           => "سحب لتسليم حوالة وكيل | كود: {$transfer->tracking_code}",
-                        'balance_before' => $balanceBefore,
-                        'balance_after'  => $superSafe->fresh()->balance,
+                       
                     ]);
 
                 } else {
@@ -362,7 +357,7 @@ class TransferController extends Controller
                     }
 
                     $officeSafe->decrement('balance', $transfer->amount_in_usd);
-
+                }
                     // حساب الربح
                     $currency = \App\Models\Currency::find($transfer->send_currency_id);
                     if ($currency) {
@@ -385,7 +380,7 @@ class TransferController extends Controller
                         );
                         $profitSafe->increment('profit_main', $profit);
                     }
-                }
+                
 
                 // --- الإجراءات المشتركة (رفع الصورة وتحديث الحالة) ---
 
