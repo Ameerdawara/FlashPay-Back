@@ -173,6 +173,21 @@ Route::patch('/agent/profit-ratio', [\App\Http\Controllers\TransferController::c
     Route::patch('/bank-transfers/{id}/approve', [BankTransferController::class, 'approve']);
     Route::patch('/bank-transfers/{id}/reject', [BankTransferController::class, 'reject']);
 });
+Route::middleware('auth:sanctum')->group(function () {
+    // ... your other routes ...
+
+    // 1. Get archived transfers (Must be placed BEFORE any dynamic {id} routes if you add them later)
+    Route::get('/monthly-closing/archived-transfers', [MonthlyClosingController::class, 'archivedTransfers']);
+
+    // 2. Get the list of previous closings
+    Route::get('/monthly-closing', [MonthlyClosingController::class, 'index']);
+
+    // 3. Execute a new monthly closing
+    Route::post('/monthly-closing', [MonthlyClosingController::class, 'store']);
+
+    // 4. Get safe snapshots for a specific closing
+    Route::get('/monthly-closing/{id}/safes', [MonthlyClosingController::class, 'safeSnapshots']);
+});
 Route::prefix('monthly-closing')->group(function () {
 
     // GET  /monthly-closing           — سجل الإقفالات (سوبر أدمن + محاسب + أدمن)
