@@ -72,6 +72,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // ─── Super Admin فقط ─────────────────────────────────────────────────
     Route::middleware('role:super_admin')->group(function () {
 
+            Route::post('/offices',            [OfficeController::class, 'store']);
+            Route::put('/offices/{office}',    [OfficeController::class, 'update']);
+            Route::delete('/offices/{office}', [OfficeController::class, 'destroy']);
+
         // SuperSafe (الخزنة العليا)
         Route::get('/super-safe',                    [\App\Http\Controllers\SuperSafeController::class, 'show']);
         Route::get('/super-safe/logs',               [\App\Http\Controllers\SuperSafeController::class, 'logs']);
@@ -140,6 +144,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ─── Super Admin + Admin ───────────────────────────────────────────────
     Route::middleware('role:super_admin,admin')->group(function () {
+ Route::get('/offices', [OfficeController::class, 'index']);
 
         Route::get('/safe-logs', [SafeLogController::class, 'index']);
 
@@ -159,12 +164,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/monthly-closing/archived-transfers',    [MonthlyClosingController::class, 'archivedTransfers']);
 
         // المكاتب (عرض للجميع، تعديل للأدمن فقط عبر policy)
-        Route::get('/offices', [OfficeController::class, 'index']);
-        Route::middleware('can:manage-offices')->group(function () {
-            Route::post('/offices',            [OfficeController::class, 'store']);
-            Route::put('/offices/{office}',    [OfficeController::class, 'update']);
-            Route::delete('/offices/{office}', [OfficeController::class, 'destroy']);
-        });
+
     });
 
 
