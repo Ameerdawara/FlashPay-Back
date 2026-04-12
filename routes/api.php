@@ -31,10 +31,11 @@ use App\Models\User;
 */
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login',    [AuthController::class, 'login']);
-
+Route::get('/offices', [OfficeController::class, 'index']);
 Route::get('/countries', [CountryController::class, 'index']);
 Route::get('/cities',    [CityController::class, 'index']);
 Route::get('/currencies',[CurrencyController::class,'index']);
+
 
 
 /*
@@ -49,6 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', fn(Request $r) => response()->json(['user' => $r->user()]));
     Route::get('/user', fn(Request $r) => $r->user());
     Route::post('/logout', [AuthController::class, 'logout']);
+        Route::get('/offices', [OfficeController::class, 'index']);
 
     Route::get('/profile',        [ProfileController::class, 'index']);
     Route::put('/profile/update', [ProfileController::class, 'update']);
@@ -121,14 +123,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/trading-safe/update-cost', [TradingSafeController::class, 'updateCostManual']);
 
         // الموافقة والرفض لحوالات البنك
-        Route::patch('/bank-transfers/{id}/approve', [BankTransferController::class, 'approve']);
-        Route::patch('/bank-transfers/{id}/reject',  [BankTransferController::class, 'reject']);
+        Route::patch('/bank-transfer/{id}/approve', [BankTransferController::class, 'approve']);
+        Route::patch('/bank-transfer/{id}/reject',  [BankTransferController::class, 'reject']);
 
         // الصناديق الإضافية
         Route::apiResource('extra-boxes', ExtraBoxController::class);
     });
 
+ Route::middleware('role:admin')->group(function () {
+            Route::post('/trading-safe/update-cost', [TradingSafeController::class, 'updateCostManual']);
 
+     Route::post('/offices/{officeId}/safe', [OfficeSafeController::class, 'updateBalance']);
+        Route::post('/safes/adjust',            [SafeActionController::class, 'adjust']);
+        Route::post('/safes/transfer',          [SafeActionController::class, 'transfer']);
+        Route::post('/safes/transfer-to-office',[SafeActionController::class, 'transferToOfficeSafe']);
+        Route::post('/safes/profit/adjust',     [ProfitSafeController::class, 'adjustProfit']);
+        Route::post('/safes/transfer-profit',   [ProfitSafeController::class, 'transferProfitToOffice']);
+
+ });
     // ─── 3. مشتركة (Super Admin + Admin + Accountant + Cashier) ────────────
     Route::middleware('role:super_admin,admin,accountant,cashier')->group(function () {
         // جلب الموظفين والمكاتب للقوائم
@@ -137,6 +149,7 @@ Route::middleware('auth:sanctum')->group(function () {
             $users = User::with(['city', 'country', 'office'])->get();
             return response()->json(['status' => 'success', 'data' => $users]);
         });
+        Route::post('/monthly-closing',          [MonthlyClosingController::class, 'store']);
 
         // قراءة بيانات الصناديق
         Route::get('/safes',        [MainSafeController::class, 'index']);
@@ -149,7 +162,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/transfers/{id}/edit', [TransferController::class, 'editTransfer']);
     Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
     Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
-   
+
         // التداول
         Route::get('/trading/report',         [TradingSafeController::class, 'dailyReport']);
         Route::get('/trading/report/details', [TradingSafeController::class, 'detailedReport']);
@@ -189,10 +202,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/agent/safe',         [MainSafeController::class, 'agentSafe']);
         Route::get('/agent/safe-details', [TransferController::class, 'agentSafeDetails']);
         Route::post('/agent/transfers',   [TransferController::class, 'storeAgentTransfer']);
-
-        Route::get('/bank-transfers',      [BankTransferController::class, 'index']);
-        Route::post('/bank-transfers',     [BankTransferController::class, 'store']);
-        Route::get('/bank-transfers/{id}', [BankTransferController::class, 'show']);
+Route::get('/offices', [OfficeController::class, 'index']);
+        Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
+        Route::post('/bank-transfer',     [BankTransferController::class, 'store']);
+        Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
     });
 
 });
