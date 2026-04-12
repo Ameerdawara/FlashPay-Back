@@ -19,7 +19,9 @@ return new class extends Migration
 
             // المبالغ
             $table->decimal('amount', 15, 2);
+            
             $table->foreignId('currency_id')->constrained();
+            $table->foreignId('send_currency_id')->constrained('currencies');
             $table->decimal('fee', 10, 2)->default(0);
 
             // جهة تسليم الكاش للمستلم (Destination)
@@ -31,7 +33,7 @@ return new class extends Migration
             $table->string('receiver_phone');
             $table->string('receiver_id_image')->nullable(); // مسار صورة الهوية
 
-            $table->enum('status', ['pending', 'approved', 'ready', 'completed', 'cancelled'])->default('pending');
+            $table->enum('status', ['pending', 'approved','waiting' ,'ready', 'completed', 'cancelled'])->default('pending');
             $table->timestamps();
         });
     }

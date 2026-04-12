@@ -6,25 +6,41 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
-{
-
+{   use HasApiTokens, HasFactory, Notifiable;
+    protected $fillable = [
+        'name',
+        'email',
+        'phone',
+        'password',
+        'role',
+        'office_id',
+        'country_id',
+        'city_id',
+        'is_active',
+        'id_card_image'
+    ];
     public function office()
     {
         return $this->belongsTo(Office::class);
     }
 
     public function country()
-    { // للمناديب فقط
+    { 
         return $this->belongsTo(Country::class);
+    }
+    public function city()
+    { // للمناديب فقط
+        return $this->belongsTo(City::class);
     }
 
     // إذا كان المندوب له صندوق (Polymorphic)
     public function mainSafe()
-{
-    return $this->morphOne(MainSafe::class, 'owner');
-}
+    {
+        return $this->morphOne(MainSafe::class, 'owner');
+    }
 
     // الحوالات التي أرسلها الزبون
     public function sentTransfers()
@@ -39,12 +55,6 @@ class User extends Authenticatable
      *
      * @var list<string>
      */
-    protected $fillable = [
-        'name',
-        'email',
-        'password',
-    ];
-
     /**
      * The attributes that should be hidden for serialization.
      *
@@ -65,6 +75,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 }
