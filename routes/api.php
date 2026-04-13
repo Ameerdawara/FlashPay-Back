@@ -50,7 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', fn(Request $r) => response()->json(['user' => $r->user()]));
     Route::get('/user', fn(Request $r) => $r->user());
     Route::post('/logout', [AuthController::class, 'logout']);
-        Route::get('/offices', [OfficeController::class, 'index']);
+ 
 
     Route::get('/profile',        [ProfileController::class, 'index']);
     Route::put('/profile/update', [ProfileController::class, 'update']);
@@ -144,7 +144,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ─── 3. مشتركة (Super Admin + Admin + Accountant + Cashier) ────────────
     Route::middleware('role:super_admin,admin,accountant,cashier')->group(function () {
         // جلب الموظفين والمكاتب للقوائم
-        Route::get('/offices', [OfficeController::class, 'index']);
+       
         Route::get('/users', function () {
             $users = User::with(['city', 'country', 'office'])->get();
             return response()->json(['status' => 'success', 'data' => $users]);
@@ -202,7 +202,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/agent/safe',         [MainSafeController::class, 'agentSafe']);
         Route::get('/agent/safe-details', [TransferController::class, 'agentSafeDetails']);
         Route::post('/agent/transfers',   [TransferController::class, 'storeAgentTransfer']);
-Route::get('/offices', [OfficeController::class, 'index']);
+       
         Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
         Route::post('/bank-transfer',     [BankTransferController::class, 'store']);
         Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
