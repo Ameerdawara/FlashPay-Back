@@ -23,7 +23,7 @@ class ProfileController extends Controller
 
         // إذا كان المستخدم وكيل، نجلب الحوالات الموجهة إليه
         if ($user->role === 'agent') {
-            $query->where('destination_agent_id', $user->id);
+            $query->where('sender_id', $user->id);
         } 
         // إذا كان زبون عادي (Customer)، نجلب الحوالات التي أرسلها
         else {

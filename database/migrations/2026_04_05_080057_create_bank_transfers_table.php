@@ -14,7 +14,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('bank_transfers', function (Blueprint $table) {
+        Schema::create('bank_transfer', function (Blueprint $table) {
             $table->id();
 
             // الوكيل الذي أرسل الطلب
@@ -50,6 +50,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('bank_transfers');
+        Schema::dropIfExists('bank_transfer');
     }
 };
