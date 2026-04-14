@@ -49,7 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', fn(Request $r) => response()->json(['user' => $r->user()]));
     Route::get('/user', fn(Request $r) => $r->user());
     Route::post('/logout', [AuthController::class, 'logout']);
-        Route::get('/offices', [OfficeController::class, 'index']);
+
 
     Route::get('/profile',        [ProfileController::class, 'index']);
     Route::put('/profile/update', [ProfileController::class, 'update']);
@@ -143,6 +143,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ─── 3. مشتركة (Super Admin + Admin + Accountant + Cashier) ────────────
     Route::middleware('role:super_admin,admin,accountant,cashier')->group(function () {
         // جلب الموظفين والمكاتب للقوائم
+
         Route::get('/users', function () {
             $users = User::with(['city', 'country', 'office'])->get();
             return response()->json(['status' => 'success', 'data' => $users]);
