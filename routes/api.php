@@ -31,7 +31,7 @@ use App\Models\User;
 */
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login',    [AuthController::class, 'login']);
-Route::get('/offices', [OfficeController::class, 'index']);
+
 Route::get('/countries', [CountryController::class, 'index']);
 Route::get('/cities',    [CityController::class, 'index']);
 Route::get('/currencies',[CurrencyController::class,'index']);
@@ -44,7 +44,6 @@ Route::get('/currencies',[CurrencyController::class,'index']);
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
-
     // ─── 1. مشتركة: أي مستخدم مسجّل ────────────────────────────────────────
     Route::post('/update-fcm-token', [AuthController::class, 'updateFcmToken']);
     Route::get('/me', fn(Request $r) => response()->json(['user' => $r->user()]));
@@ -144,7 +143,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // ─── 3. مشتركة (Super Admin + Admin + Accountant + Cashier) ────────────
     Route::middleware('role:super_admin,admin,accountant,cashier')->group(function () {
         // جلب الموظفين والمكاتب للقوائم
-        Route::get('/offices', [OfficeController::class, 'index']);
         Route::get('/users', function () {
             $users = User::with(['city', 'country', 'office'])->get();
             return response()->json(['status' => 'success', 'data' => $users]);
@@ -202,7 +200,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/agent/safe',         [MainSafeController::class, 'agentSafe']);
         Route::get('/agent/safe-details', [TransferController::class, 'agentSafeDetails']);
         Route::post('/agent/transfers',   [TransferController::class, 'storeAgentTransfer']);
-Route::get('/offices', [OfficeController::class, 'index']);
         Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
         Route::post('/bank-transfer',     [BankTransferController::class, 'store']);
         Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
