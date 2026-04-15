@@ -1,47 +1,27 @@
 <?php
-// =============================================================================
-//  BankTransferController.php
-//  المسار: app/Http/Controllers/BankTransferController.php
-//
-//  الأدوار:
-//    • agent       → store()  : إنشاء طلب تحويل بنكي (status = pending)
-//    • agent       → index()  : عرض طلباته هو فقط
-//    • super_admin → index()  : عرض جميع الطلبات
-//    • super_admin → approve(): الموافقة → يُضاف المبلغ إلى super_safe
-//    • super_admin → reject() : رفض الطلب
-// =============================================================================
-
 namespace App\Http\Controllers;
 
 use App\Models\BankTransfer;
-use App\Models\SuperSafe;          // تأكّد من وجود هذا الموديل لديك
+use App\Models\SuperSafe;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class BankTransferController extends Controller
 {
-    // ─────────────────────────────────────────────────────────────────────────
-    //  GET /bank-transfers
-    //  الوكيل: طلباته فقط | super_admin: الكل
-    // ─────────────────────────────────────────────────────────────────────────
     public function index(Request $request)
     {
         $user = Auth::user();
 
-        $query = BankTransfer::with(['agent:id,name,phone', 'approvedBy:id,name'])
+        $query = BankTransfer::with(['agent:id,name,phone', 'approvedBy:id,name', 'cashier:id,name'])
                               ->orderBy('created_at', 'desc');
 
-        // الوكيل يرى طلباته فقط
         if ($user->role === 'agent') {
             $query->where('agent_id', $user->id);
-        }
-        // super_admin يرى الكل (لا قيد إضافي)
-        elseif ($user->role !== 'super_admin') {
+        } elseif (!in_array($user->role, ['super_admin', 'admin', 'cashier'])) {
             return response()->json(['message' => 'غير مصرح لك بعرض هذه البيانات'], 403);
         }
 
-        // فلترة اختيارية بالحالة
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
@@ -52,10 +32,6 @@ class BankTransferController extends Controller
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  POST /bank-transfers
-    //  الوكيل ينشئ طلب تحويل بنكي — status = pending تلقائياً
-    // ─────────────────────────────────────────────────────────────────────────
     public function store(Request $request)
     {
         $user = Auth::user();
@@ -68,16 +44,10 @@ class BankTransferController extends Controller
             'bank_name'      => 'required|string|max:255',
             'account_number' => 'required|string|max:100',
             'full_name'      => 'required|string|max:255',
+            'recipient_name' => 'required|string|max:255', // الحقل الجديد
             'phone'          => 'required|string|max:30',
             'amount'         => 'required|numeric|min:1',
             'notes'          => 'nullable|string|max:1000',
-        ], [
-            'bank_name.required'      => 'اسم البنك مطلوب',
-            'account_number.required' => 'رقم الحساب مطلوب',
-            'full_name.required'      => 'الاسم الكامل مطلوب',
-            'phone.required'          => 'رقم الموبايل مطلوب',
-            'amount.required'         => 'المبلغ مطلوب',
-            'amount.min'              => 'المبلغ يجب أن يكون أكبر من صفر',
         ]);
 
         $transfer = BankTransfer::create([
@@ -85,29 +55,44 @@ class BankTransferController extends Controller
             'bank_name'      => $validated['bank_name'],
             'account_number' => $validated['account_number'],
             'full_name'      => $validated['full_name'],
+            'recipient_name' => $validated['recipient_name'],
             'phone'          => $validated['phone'],
             'amount'         => $validated['amount'],
             'notes'          => $validated['notes'] ?? null,
-            'status'         => 'pending', // دائماً pending عند الإنشاء
+            'status'         => 'pending',
         ]);
 
         return response()->json([
             'status'  => 'success',
-            'message' => 'تم إرسال طلب التحويل البنكي بنجاح وهو بانتظار موافقة المشرف',
+            'message' => 'تم إرسال طلب التحويل البنكي بنجاح وهو بانتظار موافقة الإدارة',
             'data'    => $transfer->load('agent:id,name'),
         ], 201);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  PATCH /bank-transfers/{id}/approve
-    //  super_admin يوافق → يُضاف المبلغ إلى super_safe
-    // ─────────────────────────────────────────────────────────────────────────
-    public function approve(Request $request, $id)
+   public function approve(Request $request, $id)
     {
         $user = Auth::user();
 
-        if ($user->role !== 'super_admin') {
-            return response()->json(['message' => 'هذه الصلاحية للمشرف العام فقط'], 403);
+        if (!in_array($user->role, ['super_admin', 'admin'])) {
+            return response()->json(['message' => 'هذه الصلاحية للإدارة فقط'], 403);
+        }
+
+        $request->validate([
+            'cashier_id' => 'required|exists:users,id'
+        ]);
+
+        // ✅ إضافة: التحقق من الكاشير ومكتبه
+        $selectedCashier = \App\Models\User::findOrFail($request->cashier_id);
+
+        if ($selectedCashier->role !== 'cashier') {
+            return response()->json(['message' => 'المستخدم المحدد ليس كاشير'], 422);
+        }
+
+        // إذا كان المستخدم admin (مدير مكتب)، نمنعه من اختيار كاشير من مكتب آخر
+        if ($user->role === 'admin') {
+            if ($selectedCashier->office_id !== $user->office_id) {
+                return response()->json(['message' => 'لا يمكنك اختيار كاشير من مكتب آخر'], 403);
+            }
         }
 
         $transfer = BankTransfer::findOrFail($id);
@@ -118,52 +103,37 @@ class BankTransferController extends Controller
             ], 422);
         }
 
-        return DB::transaction(function () use ($transfer, $user) {
+        $transfer->cashier_id = $request->cashier_id;
 
-            // ── إضافة المبلغ إلى super_safe ──────────────────────────────
-            // نفترض وجود سجل واحد في جدول super_safes
-            // عدّل اسم الجدول/الموديل حسب بنيتك
-            $superSafe = \App\Models\SuperSafe::first();
-
-            if (!$superSafe) {
-                // إذا لم يكن موجوداً، أنشئه
-                $superSafe = \App\Models\SuperSafe::create(['balance' => 0]);
-            }
-
+        return DB::transaction(function () use ($transfer, $user, $request) {
+            $superSafe = \App\Models\SuperSafe::firstOrCreate([], ['balance' => 0]);
             $superSafe->increment('balance', $transfer->amount);
 
-            // ── تحديث حالة الطلب ──────────────────────────────────────────
             $transfer->update([
-                'status'      => 'approved',
-                'approved_by' => $user->id,
+                'status'       => 'admin_approved',
+                'approved_by'  => $user->id,
+                'cashier_id'   => $request->cashier_id,
             ]);
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'تمت الموافقة وتم إضافة المبلغ إلى الصندوق الرئيسي',
-                'data'    => $transfer->load(['agent:id,name', 'approvedBy:id,name']),
+                'message' => 'تمت الموافقة، وتم إرسالها للكاشير للتسليم',
+                'data'    => $transfer->load(['agent:id,name', 'approvedBy:id,name', 'cashier:id,name']),
             ]);
         });
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    //  PATCH /bank-transfers/{id}/reject
-    //  super_admin يرفض الطلب
-    // ─────────────────────────────────────────────────────────────────────────
     public function reject(Request $request, $id)
     {
         $user = Auth::user();
 
-        if ($user->role !== 'super_admin') {
-            return response()->json(['message' => 'هذه الصلاحية للمشرف العام فقط'], 403);
+        if (!in_array($user->role, ['super_admin', 'admin'])) {
+            return response()->json(['message' => 'هذه الصلاحية للإدارة فقط'], 403);
         }
 
         $transfer = BankTransfer::findOrFail($id);
 
         if ($transfer->status !== 'pending') {
-            return response()->json([
-                'message' => 'لا يمكن تعديل طلب تمت معالجته مسبقاً',
-            ], 422);
+            return response()->json(['message' => 'لا يمكن تعديل طلب تمت معالجته مسبقاً'], 422);
         }
 
         $transfer->update([
@@ -171,29 +141,40 @@ class BankTransferController extends Controller
             'approved_by' => $user->id,
         ]);
 
+        return response()->json(['status' => 'success', 'message' => 'تم رفض الطلب', 'data' => $transfer]);
+    }
+
+    // الدالة الجديدة الخاصة بالكاشير
+    public function complete(Request $request, $id)
+    {
+        $user = Auth::user();
+
+        if ($user->role !== 'cashier') {
+            return response()->json(['message' => 'هذه الصلاحية للكاشير فقط'], 403);
+        }
+
+        $transfer = BankTransfer::findOrFail($id);
+
+        if ($transfer->status !== 'admin_approved') {
+            return response()->json(['message' => 'يجب موافقة الإدارة على الحوالة أولاً'], 422);
+        }
+
+        $transfer->update([
+            'status'     => 'completed',
+            'cashier_id' => $user->id,
+        ]);
+
         return response()->json([
             'status'  => 'success',
-            'message' => 'تم رفض طلب التحويل البنكي',
-            'data'    => $transfer->load(['agent:id,name', 'approvedBy:id,name']),
+            'message' => 'تم التسليم بنجاح',
+            'data'    => $transfer->load(['agent:id,name', 'approvedBy:id,name', 'cashier:id,name'])
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    //  GET /bank-transfers/{id}
-    //  عرض تفاصيل طلب واحد (agent يرى طلبه فقط، super_admin يرى الكل)
-    // ─────────────────────────────────────────────────────────────────────────
     public function show($id)
     {
         $user = Auth::user();
-        $transfer = BankTransfer::with(['agent:id,name,phone', 'approvedBy:id,name'])->findOrFail($id);
-
-        if ($user->role === 'agent' && $transfer->agent_id !== $user->id) {
-            return response()->json(['message' => 'غير مصرح لك بعرض هذا الطلب'], 403);
-        }
-
-        if (!in_array($user->role, ['agent', 'super_admin'])) {
-            return response()->json(['message' => 'غير مصرح'], 403);
-        }
+        $transfer = BankTransfer::with(['agent:id,name,phone', 'approvedBy:id,name', 'cashier:id,name'])->findOrFail($id);
 
         return response()->json(['status' => 'success', 'data' => $transfer]);
     }
