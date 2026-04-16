@@ -46,7 +46,8 @@ Route::get('/countries', [CountryController::class, 'index']);
 Route::get('/cities',    [CityController::class, 'index']);
 Route::get('/currencies',[CurrencyController::class,'index']);
 
-
+ Route::get('/profile',        [ProfileController::class, 'index']);
+ Route::put('/profile/update', [ProfileController::class, 'update']);
 
 /*
 |--------------------------------------------------------------------------
@@ -61,8 +62,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
 
-    Route::get('/profile',        [ProfileController::class, 'index']);
-    Route::put('/profile/update', [ProfileController::class, 'update']);
+   
 
     Route::get('/agents', [AuthController::class, 'getAgents']);
    Route::get('/offices', [OfficeController::class, 'index']);
