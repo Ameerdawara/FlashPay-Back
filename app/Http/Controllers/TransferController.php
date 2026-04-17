@@ -384,10 +384,10 @@ class TransferController extends Controller
 
                 // --- الإجراءات المشتركة (رفع الصورة وتحديث الحالة) ---
 
-         if ($request->hasFile('receiver_id_image')) {
-                    $path = $request->file('receiver_id_image')->store('receipts', 'public');
-                    $transfer->receiver_id_image = $path;
-                }
+         // if ($request->hasFile('receiver_id_image')) {
+         //            $path = $request->file('receiver_id_image')->store('receipts', 'public');
+         //            $transfer->receiver_id_image = $path;
+         //        }
 
                 $transfer->status = $request->status;
             }
