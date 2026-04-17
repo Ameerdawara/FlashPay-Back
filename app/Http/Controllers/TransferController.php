@@ -384,11 +384,19 @@ class TransferController extends Controller
 
                 // --- الإجراءات المشتركة (رفع الصورة وتحديث الحالة) ---
 
-                // رفع صورة الهوية
-                if ($request->hasFile('receiver_id_image')) {
-                    $path = $request->file('receiver_id_image')->store('receipts', 'public');
-                    $transfer->receiver_id_image = $path;
-                }
+               // --- الجزء الخاص بالكاشير داخل الـ Controller ---
+if ($request->hasFile('receiver_id_image')) {
+    $file = $request->file('receiver_id_image');
+    
+    // 1. توليد اسم فريد للملف (وقت + اسم أصلي)
+    $fileName = time() . '_' . $file->getClientOriginalName();
+    
+    // 2. الرفع باستخدام storeAs لضمان التعامل مع ملف وليس مجلد
+    $path = $file->storeAs('receipts', $fileName, 'public');
+    
+    // 3. تخزين المسار في قاعدة البيانات
+    $transfer->receiver_id_image = $path;
+}
 
                 $transfer->status = $request->status;
             }
