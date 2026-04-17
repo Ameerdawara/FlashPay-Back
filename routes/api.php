@@ -45,8 +45,6 @@ Route::post('/login',    [AuthController::class, 'login']);
 Route::get('/countries', [CountryController::class, 'index']);
 Route::get('/cities',    [CityController::class, 'index']);
 Route::get('/currencies',[CurrencyController::class,'index']);
-Route::get('/profile',        [ProfileController::class, 'index']);
-Route::put('/profile/update', [ProfileController::class, 'update']);
 
 
 
