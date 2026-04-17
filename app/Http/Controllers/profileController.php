@@ -17,6 +17,10 @@ class ProfileController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
+        
+        if (!$user) {
+        return response()->json(['message' => 'Unauthorized'], 401);
+    }
 
         // نبني الاستعلام الأساسي مع جلب بيانات العملة
         $query = Transfer::with(['currency', 'sendCurrency'])->orderBy('created_at', 'desc');
