@@ -46,9 +46,7 @@ Route::get('/countries', [CountryController::class, 'index']);
 Route::get('/cities',    [CityController::class, 'index']);
 Route::get('/currencies',[CurrencyController::class,'index']);
 
- Route::get('/profile',        [ProfileController::class, 'index']);
- Route::put('/profile/update', [ProfileController::class, 'update']);
-
+ 
 /*
 |--------------------------------------------------------------------------
 | Protected Routes (تحتاج توكن صحيح)
@@ -60,6 +58,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', fn(Request $r) => response()->json(['user' => $r->user()]));
     Route::get('/user', fn(Request $r) => $r->user());
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/profile',        [ProfileController::class, 'index']);
+    Route::put('/profile/update', [ProfileController::class, 'update']);
 
 
    
