@@ -71,9 +71,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/conversations/{id}/read', [MessageController::class, 'markAsRead']);
 // ─── حوالات البنك (عرض وإنشاء) ────────────────────────────────────────
     Route::post('/bank-transfer',     [BankTransferController::class, 'store'])->middleware('role:agent');
-Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
-    Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
-  
+
     // ─── موافقة ورفض الإدارة لحوالات البنك ─────────────────────────────────
     Route::middleware('role:super_admin,admin')->group(function () {
         Route::patch('/bank-transfer/{id}/approve', [BankTransferController::class, 'approve']);
@@ -226,7 +224,7 @@ Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
     //     Route::get('/bank-transfer/{id}',           [BankTransferController::class, 'show']);
   
         Route::post('/agent/transfers',   [TransferController::class, 'storeAgentTransfer']);
-
+        Route::post('/bank-transfer',     [BankTransferController::class, 'store']);
     });
 
 });
