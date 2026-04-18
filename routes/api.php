@@ -24,16 +24,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Models\User;
 
-
-Route::get('/run-seeds', function() {
-    try {
-        // تنفيذ الـ Seed الأساسي
-       \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
-        return response()->json(['message' => 'تم تنفيذ الـ Seeds بنجاح!']);
-    } catch (\Exception $e) {
-        return response()->json(['error' => $e->getMessage()], 500);
-    }
-});
 /*
 |--------------------------------------------------------------------------
 | Public Routes (المسارات العامة - بدون توكن)
@@ -46,7 +36,8 @@ Route::get('/countries', [CountryController::class, 'index']);
 Route::get('/cities',    [CityController::class, 'index']);
 Route::get('/currencies',[CurrencyController::class,'index']);
 
- 
+
+
 /*
 |--------------------------------------------------------------------------
 | Protected Routes (تحتاج توكن صحيح)
@@ -58,11 +49,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', fn(Request $r) => response()->json(['user' => $r->user()]));
     Route::get('/user', fn(Request $r) => $r->user());
     Route::post('/logout', [AuthController::class, 'logout']);
+
+
     Route::get('/profile',        [ProfileController::class, 'index']);
     Route::put('/profile/update', [ProfileController::class, 'update']);
-
-
-   
 
     Route::get('/agents', [AuthController::class, 'getAgents']);
    Route::get('/offices', [OfficeController::class, 'index']);
@@ -184,10 +174,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/trading-safe', [TradingSafeController::class, 'index']);
         Route::get('/profit-safe',  [ProfitSafeController::class, 'getProfitSafe']);
          Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
-    Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
-    Route::put('/transfers/{id}/edit', [TransferController::class, 'editTransfer']);
-    Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
-    Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
+        Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
+        Route::put('/transfers/{id}/edit', [TransferController::class, 'editTransfer']);
+        Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
+        Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
 
         // التداول
         Route::get('/trading/report',         [TradingSafeController::class, 'dailyReport']);
