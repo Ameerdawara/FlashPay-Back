@@ -71,11 +71,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/conversations/{id}/read', [MessageController::class, 'markAsRead']);
 // ─── حوالات البنك (عرض وإنشاء) ────────────────────────────────────────
     Route::post('/bank-transfer',     [BankTransferController::class, 'store'])->middleware('role:agent');
-
+    Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
+    Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
+    Route::patch('/transfers/{id}/update-status', [TransferController::class, 'update']);
     // ─── موافقة ورفض الإدارة لحوالات البنك ─────────────────────────────────
     Route::middleware('role:super_admin,admin')->group(function () {
-        Route::patch('/bank-transfer/{id}/approve', [BankTransferController::class, 'approve']);
-        Route::patch('/bank-transfer/{id}/reject',  [BankTransferController::class, 'reject']);
+    Route::patch('/bank-transfer/{id}/approve', [BankTransferController::class, 'approve']);
+    Route::patch('/bank-transfer/{id}/reject',  [BankTransferController::class, 'reject']);
     });
 
     // ─── 2. Super Admin فقط ────────────────────────────────────────────────
@@ -191,7 +193,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/internal-transfers/{id}/toggle-paid', [InternalTransferController::class, 'togglePaidStatus']);
   
         // تعديل حالة الحوالات الأساسية
-        Route::patch('/transfers/{id}/update-status', [TransferController::class, 'update']);
+       
     });
 // ─── 6. Cashier — حوالات البنك ────────────────────────────────────────
     Route::middleware('role:cashier')->group(function () {
@@ -224,7 +226,7 @@ Route::middleware('auth:sanctum')->group(function () {
     //     Route::get('/bank-transfer/{id}',           [BankTransferController::class, 'show']);
   
         Route::post('/agent/transfers',   [TransferController::class, 'storeAgentTransfer']);
-        Route::post('/bank-transfer',     [BankTransferController::class, 'store']);
+
     });
 
 });
