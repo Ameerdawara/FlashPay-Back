@@ -18,7 +18,7 @@ class BankTransferController extends Controller
 
         if ($user->role === 'agent') {
             $query->where('agent_id', $user->id);
-        } elseif (!in_array($user->role, ['super_admin', 'admin', 'cashier'])) {
+        } elseif (!in_array($user->role, ['super_admin', 'admin', 'cashier','accountant'])) {
             return response()->json(['message' => 'غير مصرح لك بعرض هذه البيانات'], 403);
         }
 

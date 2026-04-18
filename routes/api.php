@@ -70,8 +70,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/messages/send',            [MessageController::class, 'sendMessage']);
     Route::patch('/conversations/{id}/read', [MessageController::class, 'markAsRead']);
 // ─── حوالات البنك (عرض وإنشاء) ────────────────────────────────────────
-    Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
-    Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
     Route::post('/bank-transfer',     [BankTransferController::class, 'store'])->middleware('role:agent');
 
     // ─── موافقة ورفض الإدارة لحوالات البنك ─────────────────────────────────
@@ -174,10 +172,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/trading-safe', [TradingSafeController::class, 'index']);
         Route::get('/profit-safe',  [ProfitSafeController::class, 'getProfitSafe']);
          Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
-        Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
-        Route::put('/transfers/{id}/edit', [TransferController::class, 'editTransfer']);
-        Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
-        Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
+    Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
+    Route::put('/transfers/{id}/edit', [TransferController::class, 'editTransfer']);
+    Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
+    Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
 
         // التداول
         Route::get('/trading/report',         [TradingSafeController::class, 'dailyReport']);
@@ -191,6 +189,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/internal-transfers',                    [InternalTransferController::class, 'index']);
         Route::post('/internal-transfers',                   [InternalTransferController::class, 'store']);
         Route::patch('/internal-transfers/{id}/toggle-paid', [InternalTransferController::class, 'togglePaidStatus']);
+  Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
+    Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
 
         // تعديل حالة الحوالات الأساسية
         Route::patch('/transfers/{id}/update-status', [TransferController::class, 'update']);
@@ -224,7 +224,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/agent/safe-details', [TransferController::class, 'agentSafeDetails']);
     //    Route::get('/bank-transfer',                [BankTransferController::class, 'index']);
     //     Route::get('/bank-transfer/{id}',           [BankTransferController::class, 'show']);
-
+  Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
+    Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
+  
         Route::post('/agent/transfers',   [TransferController::class, 'storeAgentTransfer']);
         Route::post('/bank-transfer',     [BankTransferController::class, 'store']);
     });
