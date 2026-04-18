@@ -71,7 +71,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/conversations/{id}/read', [MessageController::class, 'markAsRead']);
 // ─── حوالات البنك (عرض وإنشاء) ────────────────────────────────────────
     Route::post('/bank-transfer',     [BankTransferController::class, 'store'])->middleware('role:agent');
-
+Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
+    Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
+  
     // ─── موافقة ورفض الإدارة لحوالات البنك ─────────────────────────────────
     Route::middleware('role:super_admin,admin')->group(function () {
         Route::patch('/bank-transfer/{id}/approve', [BankTransferController::class, 'approve']);
@@ -189,9 +191,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/internal-transfers',                    [InternalTransferController::class, 'index']);
         Route::post('/internal-transfers',                   [InternalTransferController::class, 'store']);
         Route::patch('/internal-transfers/{id}/toggle-paid', [InternalTransferController::class, 'togglePaidStatus']);
-  Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
-    Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
-
+  
         // تعديل حالة الحوالات الأساسية
         Route::patch('/transfers/{id}/update-status', [TransferController::class, 'update']);
     });
@@ -224,8 +224,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/agent/safe-details', [TransferController::class, 'agentSafeDetails']);
     //    Route::get('/bank-transfer',                [BankTransferController::class, 'index']);
     //     Route::get('/bank-transfer/{id}',           [BankTransferController::class, 'show']);
-  Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
-    Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
   
         Route::post('/agent/transfers',   [TransferController::class, 'storeAgentTransfer']);
         Route::post('/bank-transfer',     [BankTransferController::class, 'store']);
