@@ -70,8 +70,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/messages/send',            [MessageController::class, 'sendMessage']);
     Route::patch('/conversations/{id}/read', [MessageController::class, 'markAsRead']);
 // ─── حوالات البنك (عرض وإنشاء) ────────────────────────────────────────
-    Route::post('/bank-transfer',     [BankTransferController::class, 'store'])->middleware('role:agent');
-Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
+    Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
     Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
   
     // ─── موافقة ورفض الإدارة لحوالات البنك ─────────────────────────────────
