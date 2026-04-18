@@ -397,23 +397,23 @@ class TransferController extends Controller
         $transfer->save();
 
         // إشعار اكتمال الحوالة
-        if ($transfer->status === 'completed') {
-            $sender = \App\Models\User::find($transfer->sender_id);
-            if ($sender && $sender->fcm_token) {
-                $fcmService = new \App\Services\FcmService();
-                $fcmService->sendNotification(
-                    $sender->fcm_token,
-                    'اكتملت الحوالة! 🎉',
-                    "تم تسليم حوالتك رقم ({$transfer->tracking_code}) بنجاح.",
-                    [
-                        'transfer_id'     => (string) $transfer->id,
-                        'tracking_code'   => (string) $transfer->tracking_code,
-                        'current_user_id' => (string) $sender->id,
-                        'type'            => 'transfer_completed',
-                    ]
-                );
-            }
-        }
+        // if ($transfer->status === 'completed') {
+        //     $sender = \App\Models\User::find($transfer->sender_id);
+        //     if ($sender && $sender->fcm_token) {
+        //         $fcmService = new \App\Services\FcmService();
+        //         $fcmService->sendNotification(
+        //             $sender->fcm_token,
+        //             'اكتملت الحوالة! 🎉',
+        //             "تم تسليم حوالتك رقم ({$transfer->tracking_code}) بنجاح.",
+        //             [
+        //                 'transfer_id'     => (string) $transfer->id,
+        //                 'tracking_code'   => (string) $transfer->tracking_code,
+        //                 'current_user_id' => (string) $sender->id,
+        //                 'type'            => 'transfer_completed',
+        //             ]
+        //         );
+        //     }
+        // }
 
         return response()->json([
             'status'  => 'success',
