@@ -59,7 +59,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', fn(Request $r) => response()->json(['user' => $r->user()]));
     Route::get('/user', fn(Request $r) => $r->user());
     Route::post('/logout', [AuthController::class, 'logout']);
-
+    Route::get('/profile',        [ProfileController::class, 'index']);
+    Route::put('/profile/update', [ProfileController::class, 'update']);
 
     
     Route::get('/agents', [AuthController::class, 'getAgents']);
@@ -182,10 +183,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/trading-safe', [TradingSafeController::class, 'index']);
         Route::get('/profit-safe',  [ProfitSafeController::class, 'getProfitSafe']);
          Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
-    Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
-    Route::put('/transfers/{id}/edit', [TransferController::class, 'editTransfer']);
-    Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
-    Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
+        Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
+        Route::put('/transfers/{id}/edit', [TransferController::class, 'editTransfer']);
+        Route::get('/transfers/history/all', [TransferController::class, 'transferHistory']);
+        Route::get('/transfers/{id}/history', [TransferController::class, 'transferHistory']);
 
         // التداول
         Route::get('/trading/report',         [TradingSafeController::class, 'dailyReport']);
