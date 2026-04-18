@@ -19,7 +19,9 @@ protected $table = 'bank_transfer';
         'account_number',  // رقم الحساب
         'full_name',       // اسم صاحب الحساب (صاحب الحساب البنكي)
         'recipient_name',  // اسم المستلم الفعلي للمبلغ
-        'phone',           // رقم الموبايل
+        'phone',
+        'destination_country', // الدولة الوجهة
+        'destination_city',       // رقم الموبايل
         'amount',          // المبلغ (USD)
         'notes',           // ملاحظات اختيارية
         'status',          // pending | admin_approved | rejected | completed

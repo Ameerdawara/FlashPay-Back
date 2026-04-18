@@ -276,19 +276,19 @@ class TransferController extends Controller
             if ($request->status === 'ready' && $transfer->status === 'waiting') {
                 // إرسال إشعار للزبون بأن الحوالة جاهزة
                 $customer = \App\Models\User::find($transfer->sender_id);
-                if ($customer && $customer->fcm_token) {
-                    $fcmService = new \App\Services\FcmService();
-                    $fcmService->sendNotification(
-                        $customer->fcm_token,
-                        "حوالتك جاهزة! ✅",
-                        "طلبك للحوالة رقم ({$transfer->tracking_code}) أصبح جاهزاً للاستلام.",
-                        [
-                            'transfer_id' => (string)$transfer->id,
-                            'type'        => 'transfer_ready',
-                            'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
-                        ]
-                    );
-                }
+                // if ($customer && $customer->fcm_token) {
+                //     $fcmService = new \App\Services\FcmService();
+                //     $fcmService->sendNotification(
+                //         $customer->fcm_token,
+                //         "حوالتك جاهزة! ✅",
+                //         "طلبك للحوالة رقم ({$transfer->tracking_code}) أصبح جاهزاً للاستلام.",
+                //         [
+                //             'transfer_id' => (string)$transfer->id,
+                //             'type'        => 'transfer_ready',
+                //             'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
+                //         ]
+                //     );
+                // }
 
                 // إرسال رسالة الواتساب
                 $phone = $transfer->receiver_phone;
@@ -384,8 +384,7 @@ class TransferController extends Controller
 
                 // --- الإجراءات المشتركة (رفع الصورة وتحديث الحالة) ---
 
-                // رفع صورة الهوية
-                if ($request->hasFile('receiver_id_image')) {
+         if ($request->hasFile('receiver_id_image')) {
                     $path = $request->file('receiver_id_image')->store('receipts', 'public');
                     $transfer->receiver_id_image = $path;
                 }

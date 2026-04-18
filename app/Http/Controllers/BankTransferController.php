@@ -48,6 +48,8 @@ class BankTransferController extends Controller
             'phone'          => 'required|string|max:30',
             'amount'         => 'required|numeric|min:1',
             'notes'          => 'nullable|string|max:1000',
+            'destination_country' => 'nullable|string|max:100',
+            'destination_city'    => 'nullable|string|max:100',
         ]);
 
         $transfer = BankTransfer::create([
@@ -59,6 +61,8 @@ class BankTransferController extends Controller
             'phone'          => $validated['phone'],
             'amount'         => $validated['amount'],
             'notes'          => $validated['notes'] ?? null,
+            'destination_country' => $validated['destination_country'] ?? null,
+            'destination_city'    => $validated['destination_city'] ?? null,
             'status'         => 'pending',
         ]);
 

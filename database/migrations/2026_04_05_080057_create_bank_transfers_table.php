@@ -23,7 +23,9 @@ return new class extends Migration
         $table->string('bank_name');
         $table->string('account_number');
         $table->string('full_name');
-
+  $table->string('destination_country')->nullable(); // الدولة الوجهة
+        $table->string('destination_city')->nullable();    // المدينة الوجهة
+ 
         // 👇 هذا هو السطر الذي نسيته يجب إضافته هنا 👇
         $table->string('recipient_name');
 
