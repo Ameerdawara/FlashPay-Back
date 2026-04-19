@@ -45,9 +45,8 @@ return new class extends Migration
 
         // 3. تعديل حالة الحوالات لتشمل 'archived'
         // (ملاحظة: تأكد أن هذه هي كل الحالات الموجودة لديك في جدول الحوالات)
-        DB::statement("ALTER TABLE transfers MODIFY COLUMN status ENUM(
-            'waiting','pending','approved','ready','completed','cancelled','rejected','archived'
-        ) NOT NULL DEFAULT 'waiting'");
+       DB::statement("ALTER TABLE transfers ALTER COLUMN status TYPE VARCHAR(255)");
+    DB::statement("ALTER TABLE transfers ADD CONSTRAINT status_check CHECK (status IN ('waiting', 'pending', 'approved', 'ready', 'completed', 'cancelled', 'rejected', 'archived'))");
     }
 
     public function down(): void

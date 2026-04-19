@@ -23,22 +23,7 @@ use App\Http\Controllers\ExtraBoxController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Models\User;
-use Illuminate\Support\Facades\Artisan;
 
-
-Route::get('/run-cmd', function () {
-    try {
-        // تحذير: هذا سيمسح كل البيانات ويعيد بناء الجداول ويشغل الـ Seeders
-        Artisan::call('migrate:fresh', [
-            '--force' => true,
-            '--seed' => true
-        ]);
-
-        return 'تمت إعادة بناء قاعدة البيانات وتشغيل الـ Seed بنجاح!';
-    } catch (\Exception $e) {
-        return 'حدث خطأ: ' . $e->getMessage();
-    }
-});
 /*
 |--------------------------------------------------------------------------
 | Public Routes (المسارات العامة - بدون توكن)
@@ -238,8 +223,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/agent/safe-details', [TransferController::class, 'agentSafeDetails']);
     //    Route::get('/bank-transfer',                [BankTransferController::class, 'index']);
     //     Route::get('/bank-transfer/{id}',           [BankTransferController::class, 'show']);
-        Route::get('/main-safes',   [MainSafeController::class, 'index']);
-        Route::get('/agent/safe',  [MainSafeController::class, 'index']);
 
         Route::post('/agent/transfers',   [TransferController::class, 'storeAgentTransfer']);
         Route::post('/bank-transfer',     [BankTransferController::class, 'store']);

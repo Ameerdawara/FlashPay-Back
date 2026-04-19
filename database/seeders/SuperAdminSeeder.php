@@ -17,9 +17,8 @@ class SuperAdminSeeder extends Seeder
             'name'     => 'Anas Admin',
             'email'    => 'admin@flashpay.com',
             'phone'    => '+351920653719',
-            'password' => Hash::make('A@a12345678'), // تأكد من تغييرها لاحقاً
+            'password' => Hash::make('A@a12345678'),
             'role'     => 'super_admin',
-            // المكاتب والمدن تترك null حالياً لأن الميجريشن يسمح بذلك
             'office_id'  => null,
             'country_id' => null,
             'city_id'    => null,

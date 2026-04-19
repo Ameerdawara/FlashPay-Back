@@ -10,10 +10,7 @@ use App\Models\Transfer;
 
 class ProfileController extends Controller
 {
-    /**
-     * جلب بيانات الملف الشخصي مع سجل الحوالات
-     */
-  public function index(Request $request)
+   public function index(Request $request)
 {
     /** @var \App\Models\User $user */
     $user = Auth::user();
@@ -32,7 +29,6 @@ class ProfileController extends Controller
         ]
     ], 200);
 }
-
     /**
      * تحديث بيانات الملف الشخصي
      */
