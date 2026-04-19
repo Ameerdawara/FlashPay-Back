@@ -23,7 +23,7 @@ use App\Http\Controllers\ExtraBoxController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Models\User;
-
+use Illuminate\Support\Facades\Artisan;
 
 
 Route::get('/run-cmd', function () {
