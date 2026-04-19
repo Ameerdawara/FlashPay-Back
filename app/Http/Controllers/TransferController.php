@@ -32,7 +32,7 @@ class TransferController extends Controller
         $query->where('status', $request->status);
     }
 
-    $query->with(['sender.country', 'currency', 'sendCurrency', 'destinationOffice']);
+    $query->with(['sender.country', 'currency', 'sendCurrency', 'destinationOffice', 'destinationCountry']);
 
     if ($user->role !== 'super_admin') {
         $query->where('destination_office_id', $user->office_id);
@@ -276,19 +276,19 @@ class TransferController extends Controller
             if ($request->status === 'ready' && $transfer->status === 'waiting') {
                 // إرسال إشعار للزبون بأن الحوالة جاهزة
                 $customer = \App\Models\User::find($transfer->sender_id);
-                // if ($customer && $customer->fcm_token) {
-                //     $fcmService = new \App\Services\FcmService();
-                //     $fcmService->sendNotification(
-                //         $customer->fcm_token,
-                //         "حوالتك جاهزة! ✅",
-                //         "طلبك للحوالة رقم ({$transfer->tracking_code}) أصبح جاهزاً للاستلام.",
-                //         [
-                //             'transfer_id' => (string)$transfer->id,
-                //             'type'        => 'transfer_ready',
-                //             'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
-                //         ]
-                //     );
-                // }
+                if ($customer && $customer->fcm_token) {
+                    $fcmService = new \App\Services\FcmService();
+                    $fcmService->sendNotification(
+                        $customer->fcm_token,
+                        "حوالتك جاهزة! ✅",
+                        "طلبك للحوالة رقم ({$transfer->tracking_code}) أصبح جاهزاً للاستلام.",
+                        [
+                            'transfer_id' => (string)$transfer->id,
+                            'type'        => 'transfer_ready',
+                            'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
+                        ]
+                    );
+                }
 
                 // إرسال رسالة الواتساب
                 $phone = $transfer->receiver_phone;
@@ -340,7 +340,7 @@ class TransferController extends Controller
                         'office_id'      => $transfer->destination_office_id,
                         'office_name'    => 'تسليم حوالة وكيل',
                         'note'           => "سحب لتسليم حوالة وكيل | كود: {$transfer->tracking_code}",
-                       
+
                     ]);
 
                 } else {
@@ -380,11 +380,12 @@ class TransferController extends Controller
                         );
                         $profitSafe->increment('profit_main', $profit);
                     }
-                
+
 
                 // --- الإجراءات المشتركة (رفع الصورة وتحديث الحالة) ---
 
-         if ($request->hasFile('receiver_id_image')) {
+                // رفع صورة الهوية
+                if ($request->hasFile('receiver_id_image')) {
                     $path = $request->file('receiver_id_image')->store('receipts', 'public');
                     $transfer->receiver_id_image = $path;
                 }
@@ -514,5 +515,26 @@ class TransferController extends Controller
         }
 
         return (float) ($currency->price ?? 1);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // POST /users/{id}/nullify-transfers
+    // يُفرّغ sender_id في الحوالات لتجنب قيود المفاتيح الخارجية عند الحذف
+    // ─────────────────────────────────────────────────────────────────────
+    public function nullifyUserTransfers(Request $request, $id)
+    {
+        $user = Auth::user();
+
+        if ($user->role !== 'super_admin') {
+            return response()->json(['message' => 'غير مصرح'], 403);
+        }
+
+        // تفريغ sender_id بدلاً من حذف الحوالات للحفاظ على السجل المالي
+        Transfer::where('sender_id', $id)->update(['sender_id' => null]);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'تم تفريغ مرجع المستخدم من الحوالات',
+        ]);
     }
 }
