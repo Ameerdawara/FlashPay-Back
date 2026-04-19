@@ -234,7 +234,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // ─── 5. Agent (المندوب) فقط ────────────────────────────────────────────
     Route::middleware('role:agent')->group(function () {
 
-    Route::get('/agent/safe',         [MainSafeController::class, 'agentSafe']);
+        Route::get('/agent/safes',        [MainSafeController::class, 'index']);
+       // Route::get('/agent/safe',         [MainSafeController::class, 'agentSafe']);
         Route::get('/agent/safe-details', [TransferController::class, 'agentSafeDetails']);
     //    Route::get('/bank-transfer',                [BankTransferController::class, 'index']);
     //     Route::get('/bank-transfer/{id}',           [BankTransferController::class, 'show']);
