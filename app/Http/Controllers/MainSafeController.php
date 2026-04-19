@@ -98,10 +98,22 @@ class MainSafeController extends Controller
 
         $safe = $user->mainSafe;
 
+        // جلب الحوالات المرتبطة بالوكيل (approved, waiting, ready)
+        $transfers = \App\Models\Transfer::where('agent_id', $user->id)
+            ->whereIn('status', ['approved', 'waiting', 'ready'])
+            ->latest()
+            ->get()
+            ->toArray();
+
         return response()->json([
             'status' => 'success',
             'data'   => [
-                'balance' => $safe ? $safe->balance : 0,
+                'balance'            => $safe ? (float) $safe->balance : 0.0,
+                'agent_profit'       => $safe ? (float) ($safe->agent_profit ?? 0) : 0.0,
+                'agent_profit_ratio' => $user->agent_profit_ratio
+                    ? (float) $user->agent_profit_ratio
+                    : 0.0,
+                'transfers'          => $transfers,
             ],
         ]);
     }

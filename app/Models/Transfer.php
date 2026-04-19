@@ -30,7 +30,9 @@ class Transfer extends Model
     {
         return $this->belongsTo(User::class, 'sender_id');
     }
-
+public function destinationCountry() {
+    return $this->belongsTo(Country::class, 'destination_country_id');
+}
     public function currency()
     {
         return $this->belongsTo(Currency::class);

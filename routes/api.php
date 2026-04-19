@@ -55,7 +55,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile/update', [ProfileController::class, 'update']);
 
     Route::get('/agents', [AuthController::class, 'getAgents']);
-
+   Route::get('/offices', [OfficeController::class, 'index']);
     Route::get('/currencies/get-rate', [CurrencyController::class, 'getRate']);
     Route::post('/currencies/get-rate', [CurrencyController::class, 'getRate']);
 
@@ -69,7 +69,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/conversations/start',      [ConversationController::class, 'startConversation']);
     Route::post('/messages/send',            [MessageController::class, 'sendMessage']);
     Route::patch('/conversations/{id}/read', [MessageController::class, 'markAsRead']);
+// ─── حوالات البنك (عرض فقط — الإنشاء داخل مجموعة role:agent أدناه) ───
+    Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
+    Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
 
+    // ─── موافقة ورفض الإدارة لحوالات البنك ─────────────────────────────────
+    Route::middleware('role:super_admin,admin')->group(function () {
+        Route::patch('/bank-transfer/{id}/approve', [BankTransferController::class, 'approve']);
+        Route::patch('/bank-transfer/{id}/reject',  [BankTransferController::class, 'reject']);
+    });
 
     // ─── 2. Super Admin فقط ────────────────────────────────────────────────
     Route::middleware('role:super_admin')->group(function () {
@@ -77,8 +85,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/offices',            [OfficeController::class, 'store']);
         Route::put('/offices/{office}',    [OfficeController::class, 'update']);
         Route::delete('/offices/{office}', [OfficeController::class, 'destroy']);
-
-        // الخزنة العليا
+        Route::post('/users/{id}/nullify-transfers', [TransferController::class, 'nullifyUserTransfers']);
+        Route::delete('/users/{id}', function ($id) {
+            User::destroy($id);
+            return response()->json(['status' => 'success']);
+        });        // الخزنة العليا
         Route::get('/super-safe',                      [\App\Http\Controllers\SuperSafeController::class, 'show']);
         Route::get('/super-safe/logs',                 [\App\Http\Controllers\SuperSafeController::class, 'logs']);
         Route::post('/super-safe/adjust',              [\App\Http\Controllers\SuperSafeController::class, 'adjust']);
@@ -95,10 +106,7 @@ Route::middleware('auth:sanctum')->group(function () {
             }
             return response()->json(['status' => 'success', 'data' => $user]);
         });
-        Route::delete('/users/{id}', function ($id) {
-            User::destroy($id);
-            return response()->json(['status' => 'success']);
-        });
+
         Route::patch('/users/{id}/toggle-status', [AuthController::class, 'toggleStatus']);
 
         // أسعار الصرف وإعداداتها
@@ -120,10 +128,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/agent/profit-ratio',      [TransferController::class, 'updateAgentProfitRatio']);
         Route::post('/monthly-closing',          [MonthlyClosingController::class, 'store']);
         Route::post('/trading-safe/update-cost', [TradingSafeController::class, 'updateCostManual']);
+// Route::get('/bank-transfer',                [BankTransferController::class, 'index']);
+//         Route::get('/bank-transfer/{id}',           [BankTransferController::class, 'show']);
 
-        // الموافقة والرفض لحوالات البنك
-        Route::patch('/bank-transfer/{id}/approve', [BankTransferController::class, 'approve']);
-        Route::patch('/bank-transfer/{id}/reject',  [BankTransferController::class, 'reject']);
+//         // الموافقة والرفض لحوالات البنك
+//         Route::patch('/bank-transfer/{id}/approve', [BankTransferController::class, 'approve']);
+//         Route::patch('/bank-transfer/{id}/reject',  [BankTransferController::class, 'reject']);
 
         // الصناديق الإضافية
         Route::apiResource('extra-boxes', ExtraBoxController::class);
@@ -138,6 +148,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/safes/transfer-to-office',[SafeActionController::class, 'transferToOfficeSafe']);
         Route::post('/safes/profit/adjust',     [ProfitSafeController::class, 'adjustProfit']);
         Route::post('/safes/transfer-profit',   [ProfitSafeController::class, 'transferProfitToOffice']);
+     // الموافقة والرفض لحوالات البنك (admin أيضاً)
+//    Route::get('/bank-transfer',                [BankTransferController::class, 'index']);
+//         Route::get('/bank-transfer/{id}',           [BankTransferController::class, 'show']);
+
+//      Route::patch('/bank-transfer/{id}/approve', [BankTransferController::class, 'approve']);
+//         Route::patch('/bank-transfer/{id}/reject',  [BankTransferController::class, 'reject']);
 
  });
     // ─── 3. مشتركة (Super Admin + Admin + Accountant + Cashier) ────────────
@@ -178,7 +194,11 @@ Route::middleware('auth:sanctum')->group(function () {
         // تعديل حالة الحوالات الأساسية
         Route::patch('/transfers/{id}/update-status', [TransferController::class, 'update']);
     });
+// ─── 6. Cashier — حوالات البنك ────────────────────────────────────────
+    Route::middleware('role:cashier')->group(function () {
 
+    Route::patch('/bank-transfer/{id}/complete',  [BankTransferController::class, 'complete']);
+    });
 
     // ─── 4. مشتركة (Super Admin + Admin + Accountant) ──────────────────────
     Route::middleware('role:super_admin,admin,accountant')->group(function () {
@@ -198,12 +218,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ─── 5. Agent (المندوب) فقط ────────────────────────────────────────────
     Route::middleware('role:agent')->group(function () {
-        Route::get('/agent/safe',         [MainSafeController::class, 'agentSafe']);
+
+    Route::get('/agent/safe',         [MainSafeController::class, 'agentSafe']);
         Route::get('/agent/safe-details', [TransferController::class, 'agentSafeDetails']);
+    //    Route::get('/bank-transfer',                [BankTransferController::class, 'index']);
+    //     Route::get('/bank-transfer/{id}',           [BankTransferController::class, 'show']);
+        Route::get('/main-safes',   [MainSafeController::class, 'index']);
+        Route::get('/agent/safe',  [MainSafeController::class, 'index']);
+
         Route::post('/agent/transfers',   [TransferController::class, 'storeAgentTransfer']);
-        Route::get('/bank-transfer',      [BankTransferController::class, 'index']);
         Route::post('/bank-transfer',     [BankTransferController::class, 'store']);
-        Route::get('/bank-transfer/{id}', [BankTransferController::class, 'show']);
     });
 
 });
