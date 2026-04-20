@@ -156,7 +156,7 @@ Route::middleware('auth:sanctum')->group(function () {
 //         Route::patch('/bank-transfer/{id}/reject',  [BankTransferController::class, 'reject']);
 
         // الصناديق الإضافية
-        Route::apiResource('extra-boxes', ExtraBoxController::class);
+        
     });
 
  Route::middleware('role:admin')->group(function () {
@@ -174,7 +174,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 //      Route::patch('/bank-transfer/{id}/approve', [BankTransferController::class, 'approve']);
 //         Route::patch('/bank-transfer/{id}/reject',  [BankTransferController::class, 'reject']);
-
+Route::apiResource('extra-boxes', ExtraBoxController::class);
  });
     // ─── 3. مشتركة (Super Admin + Admin + Accountant + Cashier) ────────────
     Route::middleware('role:super_admin,admin,accountant,cashier')->group(function () {
