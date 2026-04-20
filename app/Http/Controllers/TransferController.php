@@ -148,6 +148,8 @@ class TransferController extends Controller
                 'receiver_phone'        => $validated['receiver_phone'],
                 'status'                => 'ready',
                 'fee'                   => 0,
+                    'agent_profit'          => $agentProfit,  // ✅ عمود منفصل
+
             ]);
 
             // ── تحديث super_safe (المبلغ الكامل + حصة السوبر من الربح) ──
@@ -326,7 +328,13 @@ class TransferController extends Controller
                         ->where('owner_type', 'App\Models\Office')
                         ->lockForUpdate()
                         ->first();
+ $agentSafe = \App\Models\MainSafe::where('owner_type', 'App\Models\User')
+        ->where('owner_id', $transfer->sender_id)
+        ->first();
 
+    if ($agentSafe && $transfer->agent_profit > 0) {
+        $agentSafe->increment('agent_profit', $transfer->agent_profit);
+    }
                     if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
                     if ($officeSafe->balance < $transfer->amount_in_usd) {
                         throw new \Exception("رصيد صندوق المكتب غير كافٍ لتسليم الحوالة");

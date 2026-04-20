@@ -16,6 +16,7 @@ class Transfer extends Model
         'currency_id',
         'send_currency_id',
         'fee',
+        'agent_profit',
         'destination_office_id',
         // 'destination_agent_id',
         'destination_country_id', // أضفناه هنا

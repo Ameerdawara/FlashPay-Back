@@ -87,34 +87,34 @@ class MainSafeController extends Controller
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
+public function agentSafe(Request $request)
+{
+    $user = $request->user();
 
-    public function agentSafe(Request $request)
-    {
-        $user = $request->user();
-
-        if ($user->role !== 'agent') {
-            return response()->json(['message' => 'غير مصرح'], 403);
-        }
-
-        $safe = $user->mainSafe;
-
-        // جلب الحوالات المرتبطة بالوكيل (approved, waiting, ready)
-        $transfers = \App\Models\Transfer::where('agent_id', $user->id)
-            ->whereIn('status', ['approved', 'waiting', 'ready'])
-            ->latest()
-            ->get()
-            ->toArray();
-
-        return response()->json([
-            'status' => 'success',
-            'data'   => [
-                'balance'            => $safe ? (float) $safe->balance : 0.0,
-                'agent_profit'       => $safe ? (float) ($safe->agent_profit ?? 0) : 0.0,
-                'agent_profit_ratio' => $user->agent_profit_ratio
-                    ? (float) $user->agent_profit_ratio
-                    : 0.0,
-                'transfers'          => $transfers,
-            ],
-        ]);
+    if ($user->role !== 'agent') {
+        return response()->json(['message' => 'غير مصرح'], 403);
     }
+
+    // ✅ Load the relationship, don't rely on $user->mainSafe being eager-loaded
+    $safe = $user->mainSafe()->first();
+
+    // ✅ Read transfers via sender_id (agent_id column doesn't exist on transfers table)
+    $transfers = \App\Models\Transfer::where('sender_id', $user->id)
+        ->whereIn('status', ['approved', 'waiting', 'ready', 'completed'])
+        ->with(['currency', 'sendCurrency', 'destinationOffice'])
+        ->orderBy('created_at', 'desc')
+        ->take(50)
+        ->get();
+
+    return response()->json([
+        'status' => 'success',
+        'data'   => [
+            'balance'            => $safe ? (float) $safe->balance : 0.0,
+            'agent_profit'       => $safe ? (float) ($safe->agent_profit ?? 0) : 0.0,
+            // ✅ FIXED: read from $safe (MainSafe), not from $user
+            'agent_profit_ratio' => $safe ? (float) $safe->agent_profit_ratio : 0.0,
+            'transfers'          => $transfers,
+        ],
+    ]);
+}
 }
