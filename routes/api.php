@@ -221,8 +221,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // التعديل على الحوالات وعرض الأرشيف
         Route::put('/transfers/{id}/edit',          [TransferController::class, 'editTransfer']);
-        Route::get('/transfers/history/all',        [TransferController::class, 'transferHistory']);
-        Route::get('/transfers/{id}/history',       [TransferController::class, 'transferHistory']);
+        
 
         // الإقفال الشهري
         Route::get('/monthly-closing',                    [MonthlyClosingController::class, 'index']);
