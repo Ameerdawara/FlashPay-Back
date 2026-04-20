@@ -19,11 +19,11 @@ return new class extends Migration
 
             // المبالغ
             $table->decimal('amount', 15, 2);
-            
+
             $table->foreignId('currency_id')->constrained();
             $table->foreignId('send_currency_id')->constrained('currencies');
             $table->decimal('fee', 10, 2)->default(0);
-
+            $table->decimal('agent_profit', 12, 4)->default(0);
             // جهة تسليم الكاش للمستلم (Destination)
             $table->foreignId('destination_office_id')->nullable()->constrained('offices');
             $table->foreignId('destination_agent_id')->nullable()->constrained('users');
