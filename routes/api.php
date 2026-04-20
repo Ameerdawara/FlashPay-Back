@@ -238,7 +238,7 @@ Route::apiResource('extra-boxes', ExtraBoxController::class);
     // ─── 5. Agent (المندوب) فقط ────────────────────────────────────────────
     Route::middleware('role:agent')->group(function () {
 
-        Route::get('/agent/safes',        [MainSafeController::class, 'index']);
+    Route::get('/agent/safe',         [MainSafeController::class, 'agentSafe']);    // ✅ واحدة فقط
        // Route::get('/agent/safe',         [MainSafeController::class, 'agentSafe']);
         Route::get('/agent/safe-details', [TransferController::class, 'agentSafeDetails']);
     //    Route::get('/bank-transfer',                [BankTransferController::class, 'index']);
