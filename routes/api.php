@@ -1,5 +1,4 @@
 <?php
-
 use App\Http\Controllers\MainSafeController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ChatController;
@@ -25,6 +24,13 @@ use Illuminate\Support\Facades\Route;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 
+
+Route::get('/clear-cache', function () {
+    Artisan::call('route:clear');
+    Artisan::call('config:clear');
+    Artisan::call('cache:clear');
+    return "تم مسح جميع أنواع التخزين المؤقت وتحديث المسارات!";
+});
 
 Route::get('/run-cmd', function () {
     try {
