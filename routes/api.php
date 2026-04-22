@@ -145,7 +145,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/safes/transfer-profit',    [ProfitSafeController::class, 'transferProfitToOffice']);
 
         Route::patch('/agent/profit-ratio',       [TransferController::class, 'updateAgentProfitRatio']);
-        Route::post('/monthly-closing',           [MonthlyClosingController::class, 'store']);
         Route::post('/trading-safe/update-cost',  [TradingSafeController::class, 'updateCostManual']);
     });
 
