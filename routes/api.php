@@ -38,7 +38,7 @@ Route::get('/run-cmd', function () {
             '--force' => true,
             '--seed' => true
         ]);
-        
+
         return 'تمت إعادة بناء قاعدة البيانات وتشغيل الـ Seed بنجاح!';
     } catch (\Exception $e) {
         return 'حدث خطأ: ' . $e->getMessage();
