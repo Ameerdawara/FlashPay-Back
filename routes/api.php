@@ -158,7 +158,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/safes/transfer-to-office',  [SafeActionController::class, 'transferToOfficeSafe']);
         Route::post('/safes/profit/adjust',       [ProfitSafeController::class, 'adjustProfit']);
         Route::post('/safes/transfer-profit',     [ProfitSafeController::class, 'transferProfitToOffice']);
-        Route::post('/monthly-closing',           [MonthlyClosingController::class, 'store']);
 
 
     });
@@ -205,6 +204,7 @@ Route::apiResource('extra-boxes', ExtraBoxController::class);
     // ─── 5. Super Admin + Admin + Accountant ─────────────────────────────
     Route::middleware('role:super_admin,admin,accountant')->group(function () {
         Route::get('/safe-logs', [SafeLogController::class, 'index']);
+        Route::post('/monthly-closing',           [MonthlyClosingController::class, 'store']);
 
         Route::get('/monthly-closing',                     [MonthlyClosingController::class, 'index']);
         Route::get('/monthly-closing/archived-transfers',  [MonthlyClosingController::class, 'archivedTransfers']);
