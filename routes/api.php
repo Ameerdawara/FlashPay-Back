@@ -156,7 +156,7 @@ Route::middleware('auth:sanctum')->group(function () {
 //         Route::patch('/bank-transfer/{id}/reject',  [BankTransferController::class, 'reject']);
 
         // الصناديق الإضافية
-
+        
     });
 
  Route::middleware('role:admin')->group(function () {
@@ -226,7 +226,7 @@ Route::apiResource('extra-boxes', ExtraBoxController::class);
 
         // التعديل على الحوالات وعرض الأرشيف
         Route::put('/transfers/{id}/edit',          [TransferController::class, 'editTransfer']);
-
+       
 
         // الإقفال الشهري
         Route::get('/monthly-closing',                    [MonthlyClosingController::class, 'index']);
