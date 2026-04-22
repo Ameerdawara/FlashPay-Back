@@ -37,7 +37,7 @@ class ProfileController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // التحقق من البيانات المرسلة 
+        // التحقق من البيانات المرسلة
         // نستخدم Rule::unique(...)->ignore($user->id) لكي يسمح للمستخدم بحفظ إيميله/هاتفه الحالي دون أن يعطيه خطأ "مستخدم مسبقاً"
         $validated = $request->validate([
             'name'     => 'sometimes|required|string|max:255',
@@ -50,15 +50,15 @@ class ProfileController extends Controller
         if ($request->has('name')) {
             $user->name = $validated['name'];
         }
-        
+
         if ($request->has('email')) {
             $user->email = $validated['email'];
         }
-        
+
         if ($request->has('phone')) {
             $user->phone = $validated['phone'];
         }
-        
+
         // تحديث كلمة المرور فقط إذا تم إرسالها ولم تكن فارغة
         if ($request->filled('password')) {
             $user->password = Hash::make($validated['password']);
