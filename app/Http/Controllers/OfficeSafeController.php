@@ -43,7 +43,7 @@ class OfficeSafeController extends Controller
         $currency  = $validated['currency'] ?? 'usd';
         $isDeposit = $validated['type'] === 'deposit';
         $notes     = $validated['notes'] ?? null;
-         $user = $request->user();
+        $user      = $request->user();
 
         return DB::transaction(function () use ($officeId, $amount, $currency, $isDeposit, $notes, $user) {
 
@@ -74,7 +74,7 @@ class OfficeSafeController extends Controller
                     'performed_by'     => $user?->id,
                     'balance_after'    => $officeSafe->fresh()->balance,
                     'balance_sy_after' => $officeSafe->fresh()->balance_sy,
-                    'notes'            => $notes,
+                    
                 ]);
 
                 return response()->json([
@@ -106,7 +106,7 @@ class OfficeSafeController extends Controller
                 'amount'           => $amount,
                 'description'      => ($isDeposit ? 'إيداع ليرة سورية' : 'سحب ليرة سورية') . ' في خزنة المكتب'
                                    . ($notes ? " — {$notes}" : ''),
-                'performed_by'     => $user->id ?? null,
+                'performed_by'     => $user->id,
                 'balance_after'    => $officeSafe->fresh()->balance,
                 'balance_sy_after' => $officeSafe->fresh()->balance_sy,
             ]);
