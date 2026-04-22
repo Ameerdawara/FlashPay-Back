@@ -51,11 +51,37 @@ class ExtraBoxController extends Controller
     {
         $request->validate([
             'name'   => 'sometimes|required|string|max:255',
-            'amount' => 'sometimes|required|numeric'
+            'amount' => 'sometimes|required|numeric',
+            'notes'  => 'nullable|string|max:500',
         ]);
 
         $box = ExtraBox::findOrFail($id);
-        $box->update($request->all());
+
+        // سجّل العملية في safe_action_logs إذا تغيّر المبلغ
+        if ($request->has('amount') && $request->amount != $box->amount) {
+            $diff = $request->amount - $box->amount;
+            try {
+                \Illuminate\Support\Facades\DB::table('safe_action_logs')->insert([
+                    'office_id'        => $box->office_id,
+                    'safe_type'        => 'extra_box',
+                    'action_type'      => $diff > 0 ? 'deposit' : 'withdraw',
+                    'currency'         => 'USD',
+                    'amount'           => abs($diff),
+                    'description'      => ($diff > 0 ? 'إيداع في' : 'سحب من') . " صندوق إضافي: {$box->name}"
+                                       . ($request->notes ? " — {$request->notes}" : ''),
+                    'performed_by' => $request->user()?->id,
+                    'balance_after'    => $request->amount,
+                    'balance_sy_after' => 0,
+                    'notes'            => $request->notes,
+                    'created_at'       => now(),
+                    'updated_at'       => now(),
+                ]);
+            } catch (\Exception $e) {
+                // الجدول غير موجود بعد — نتجاهل الخطأ
+            }
+        }
+
+        $box->update($request->only(['name', 'amount']));
 
         return response()->json([
             'status' => 'success',
