@@ -137,26 +137,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('cities',    CityController::class)->except(['index']);
 
         // إدارة الصناديق
-        Route::post('/offices/{officeId}/safe',  [OfficeSafeController::class, 'updateBalance']);
-        Route::post('/safes/adjust',             [SafeActionController::class, 'adjust']);
-        Route::post('/safes/transfer',           [SafeActionController::class, 'transfer']);
-        Route::post('/safes/transfer-to-office', [SafeActionController::class, 'transferToOfficeSafe']);
-        Route::post('/safes/profit/adjust',      [ProfitSafeController::class, 'adjustProfit']);
-        Route::post('/safes/transfer-profit',    [ProfitSafeController::class, 'transferProfitToOffice']);
 
         Route::patch('/agent/profit-ratio',       [TransferController::class, 'updateAgentProfitRatio']);
         Route::post('/trading-safe/update-cost',  [TradingSafeController::class, 'updateCostManual']);
     });
 
+    
+    Route::middleware('role:super_admin,admin')->group(function () {
+    Route::post('/offices/{officeId}/safe',  [OfficeSafeController::class, 'updateBalance']);
+    Route::post('/safes/adjust',             [SafeActionController::class, 'adjust']);
+    Route::post('/safes/transfer',           [SafeActionController::class, 'transfer']);
+    Route::post('/safes/transfer-to-office', [SafeActionController::class, 'transferToOfficeSafe']);
+    Route::post('/safes/profit/adjust',      [ProfitSafeController::class, 'adjustProfit']);
+    Route::post('/safes/transfer-profit',    [ProfitSafeController::class, 'transferProfitToOffice']);
+});
+
     // ─── 3. Admin فقط ────────────────────────────────────────────────────
     Route::middleware('role:admin')->group(function () {
         Route::post('/trading-safe/update-cost',  [TradingSafeController::class, 'updateCostManual']);
-        Route::post('/offices/{officeId}/safe',   [OfficeSafeController::class, 'updateBalance']);
-        Route::post('/safes/adjust',              [SafeActionController::class, 'adjust']);
-        Route::post('/safes/transfer',            [SafeActionController::class, 'transfer']);
-        Route::post('/safes/transfer-to-office',  [SafeActionController::class, 'transferToOfficeSafe']);
-        Route::post('/safes/profit/adjust',       [ProfitSafeController::class, 'adjustProfit']);
-        Route::post('/safes/transfer-profit',     [ProfitSafeController::class, 'transferProfitToOffice']);
 
 
     });
