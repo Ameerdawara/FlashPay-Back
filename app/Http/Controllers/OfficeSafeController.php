@@ -43,7 +43,7 @@ class OfficeSafeController extends Controller
         $currency  = $validated['currency'] ?? 'usd';
         $isDeposit = $validated['type'] === 'deposit';
         $notes     = $validated['notes'] ?? null;
-        $user      = $user = $request->user();
+         $user = $request->user();
 
         return DB::transaction(function () use ($officeId, $amount, $currency, $isDeposit, $notes, $user) {
 
