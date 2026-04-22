@@ -160,7 +160,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/safes/transfer-profit',     [ProfitSafeController::class, 'transferProfitToOffice']);
         Route::post('/monthly-closing',           [MonthlyClosingController::class, 'store']);
 
-        Route::apiResource('extra-boxes', ExtraBoxController::class);
+
     });
 
     // ─── 4. مشتركة (Super Admin + Admin + Accountant + Cashier) ──────────
@@ -197,8 +197,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // تعديل حالة الحوالات
         Route::patch('/transfers/{id}/update-status', [TransferController::class, 'update']);
-
-        // ✅ ExtraBox للكاشير (إضافة الصلاحية)
+Route::apiResource('extra-boxes', ExtraBoxController::class);
         Route::get('/extra-boxes',        [ExtraBoxController::class, 'index']);
         Route::get('/extra-boxes/{id}',   [ExtraBoxController::class, 'show']);
     });
