@@ -274,25 +274,25 @@ class TransferController extends Controller
     return DB::transaction(function () use ($request, $transfer, $user) {
 
         // الإدمن يوافق على الحوالة الواردة ويجهزها للاستلام
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+       if (in_array($user->role, ['admin', 'super_admin'])) {
             if ($request->status === 'ready' && $transfer->status === 'waiting') {
                 // إرسال إشعار للزبون بأن الحوالة جاهزة
-                $customer = \App\Models\User::find($transfer->sender_id);
-                if ($customer && $customer->fcm_token) {
-                    $fcmService = new \App\Services\FcmService();
-                    $fcmService->sendNotification(
-                        $customer->fcm_token,
-                        "حوالتك جاهزة! ✅",
-                        "طلبك للحوالة رقم ({$transfer->tracking_code}) أصبح جاهزاً للاستلام.",
-                        [
-                            'transfer_id' => (string)$transfer->id,
-                            'type'        => 'transfer_ready',
-                            'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
-                        ]
-                    );
-                }
+                // $customer = \App\Models\User::find($transfer->sender_id);
+                // if ($customer && $customer->fcm_token) {
+                //     $fcmService = new \App\Services\FcmService();
+                //     $fcmService->sendNotification(
+                //         $customer->fcm_token,
+                //         "حوالتك جاهزة! ✅",
+                //         "طلبك للحوالة رقم ({$transfer->tracking_code}) أصبح جاهزاً للاستلام.",
+                //         [
+                //             'transfer_id' => (string)$transfer->id,
+                //             'type'        => 'transfer_ready',
+                //             'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
+                //         ]
+                //     );
+                // }
 
-                // إرسال رسالة الواتساب
+             //   إرسال رسالة الواتساب
                 $phone = $transfer->receiver_phone;
                 $amount = $transfer->amount;
                 $currency = $transfer->currency->code ?? '';

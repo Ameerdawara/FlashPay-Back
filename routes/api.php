@@ -24,7 +24,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
-
+Route::get('/clear-cache', function () {
+    Artisan::call('route:clear');
+    Artisan::call('config:clear');
+    Artisan::call('cache:clear');
+    return "تم مسح جميع أنواع التخزين المؤقت وتحديث المسارات!";
+});
 
 Route::get('/run-cmd', function () {
     try {
@@ -151,7 +156,7 @@ Route::middleware('auth:sanctum')->group(function () {
 //         Route::patch('/bank-transfer/{id}/reject',  [BankTransferController::class, 'reject']);
 
         // الصناديق الإضافية
-        Route::apiResource('extra-boxes', ExtraBoxController::class);
+
     });
 
  Route::middleware('role:admin')->group(function () {
@@ -169,7 +174,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 //      Route::patch('/bank-transfer/{id}/approve', [BankTransferController::class, 'approve']);
 //         Route::patch('/bank-transfer/{id}/reject',  [BankTransferController::class, 'reject']);
-
+Route::apiResource('extra-boxes', ExtraBoxController::class);
  });
     // ─── 3. مشتركة (Super Admin + Admin + Accountant + Cashier) ────────────
     Route::middleware('role:super_admin,admin,accountant,cashier')->group(function () {
@@ -221,7 +226,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // التعديل على الحوالات وعرض الأرشيف
         Route::put('/transfers/{id}/edit',          [TransferController::class, 'editTransfer']);
-        
+
 
         // الإقفال الشهري
         Route::get('/monthly-closing',                    [MonthlyClosingController::class, 'index']);
@@ -233,12 +238,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // ─── 5. Agent (المندوب) فقط ────────────────────────────────────────────
     Route::middleware('role:agent')->group(function () {
 
-    Route::get('/agent/safe',         [MainSafeController::class, 'agentSafe']);
+    Route::get('/agent/safe',         [MainSafeController::class, 'agentSafe']);    // ✅ واحدة فقط
+       // Route::get('/agent/safe',         [MainSafeController::class, 'agentSafe']);
         Route::get('/agent/safe-details', [TransferController::class, 'agentSafeDetails']);
     //    Route::get('/bank-transfer',                [BankTransferController::class, 'index']);
     //     Route::get('/bank-transfer/{id}',           [BankTransferController::class, 'show']);
-        Route::get('/main-safes',   [MainSafeController::class, 'index']);
-        Route::get('/agent/safe',  [MainSafeController::class, 'index']);
 
         Route::post('/agent/transfers',   [TransferController::class, 'storeAgentTransfer']);
         Route::post('/bank-transfer',     [BankTransferController::class, 'store']);
