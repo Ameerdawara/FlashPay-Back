@@ -36,14 +36,16 @@ class OfficeSafeController extends Controller
             'amount'   => 'required|numeric|min:0.01',
             'type'     => 'required|in:deposit,withdraw',
             'currency' => 'sometimes|in:usd,sy',
+            'notes'    => 'nullable|string|max:500',
         ]);
 
         $amount    = abs($validated['amount']);
         $currency  = $validated['currency'] ?? 'usd';
         $isDeposit = $validated['type'] === 'deposit';
+        $notes     = $validated['notes'] ?? null;
         $user      = Auth::user();
 
-        return DB::transaction(function () use ($officeId, $amount, $currency, $isDeposit, $user) {
+        return DB::transaction(function () use ($officeId, $amount, $currency, $isDeposit, $notes, $user) {
 
             $officeSafe = OfficeSafe::where('office_id', $officeId)
                 ->lockForUpdate()->first();
@@ -67,10 +69,12 @@ class OfficeSafeController extends Controller
                     'action_type'      => $isDeposit ? 'deposit' : 'withdraw',
                     'currency'         => 'USD',
                     'amount'           => $amount,
-                    'description'      => ($isDeposit ? 'إيداع دولار' : 'سحب دولار') . ' في خزنة المكتب',
+                    'description'      => ($isDeposit ? 'إيداع دولار' : 'سحب دولار') . ' في خزنة المكتب'
+                                       . ($notes ? " — {$notes}" : ''),
                     'performed_by'     => $user->id ?? null,
                     'balance_after'    => $officeSafe->fresh()->balance,
                     'balance_sy_after' => $officeSafe->fresh()->balance_sy,
+                    'notes'            => $notes,
                 ]);
 
                 return response()->json([
@@ -100,7 +104,8 @@ class OfficeSafeController extends Controller
                 'action_type'      => $isDeposit ? 'deposit' : 'withdraw',
                 'currency'         => 'SYP',
                 'amount'           => $amount,
-                'description'      => ($isDeposit ? 'إيداع ليرة سورية' : 'سحب ليرة سورية') . ' في خزنة المكتب',
+                'description'      => ($isDeposit ? 'إيداع ليرة سورية' : 'سحب ليرة سورية') . ' في خزنة المكتب'
+                                   . ($notes ? " — {$notes}" : ''),
                 'performed_by'     => $user->id ?? null,
                 'balance_after'    => $officeSafe->fresh()->balance,
                 'balance_sy_after' => $officeSafe->fresh()->balance_sy,
