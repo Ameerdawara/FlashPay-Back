@@ -1,5 +1,4 @@
 <?php
-
 use App\Http\Controllers\MainSafeController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ChatController;
@@ -18,12 +17,20 @@ use App\Http\Controllers\InternalTransferController;
 use App\Http\Controllers\ProfitSafeController;
 use App\Http\Controllers\SafeLogController;
 use App\Http\Controllers\BankTransferController;
+use App\Http\Controllers\ElectronicSafeController;
 use App\Http\Controllers\MonthlyClosingController;
 use App\Http\Controllers\ExtraBoxController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
+
+Route::get('/clear-cache', function () {
+    Artisan::call('route:clear');
+    Artisan::call('config:clear');
+    Artisan::call('cache:clear');
+    return "تم مسح جميع أنواع التخزين المؤقت وتحديث المسارات!";
+});
 
 Route::get('/clear-cache', function () {
     Artisan::call('route:clear');
@@ -63,6 +70,12 @@ Route::get('/currencies', [CurrencyController::class, 'index']);
 */
 Route::middleware('auth:sanctum')->group(function () {
 
+
+    Route::prefix('electronic-safe')->group(function () {
+        Route::get('/balances', [ElectronicSafeController::class, 'getBalances']);
+        Route::post('/buy', [ElectronicSafeController::class, 'buy']);
+        Route::get('/logs', [ElectronicSafeController::class, 'logs']);
+    });
     // ─── 1. مشتركة: أي مستخدم مسجّل ────────────────────────────────────
     Route::post('/update-fcm-token', [AuthController::class, 'updateFcmToken']);
     Route::get('/me',   fn(Request $r) => response()->json(['user' => $r->user()]));
