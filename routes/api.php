@@ -73,8 +73,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('electronic-safe')->group(function () {
         Route::get('/balances', [ElectronicSafeController::class, 'getBalances']);
-        Route::post('/buy', [ElectronicSafeController::class, 'buy']);
-        Route::get('/logs', [ElectronicSafeController::class, 'logs']);
+        Route::post('/buy',     [ElectronicSafeController::class, 'buy']);
+        Route::post('/sell',    [ElectronicSafeController::class, 'sell']);
+        Route::get('/logs',     [ElectronicSafeController::class, 'logs']);
     });
     // ─── 1. مشتركة: أي مستخدم مسجّل ────────────────────────────────────
     Route::post('/update-fcm-token', [AuthController::class, 'updateFcmToken']);
@@ -155,7 +156,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/trading-safe/update-cost',  [TradingSafeController::class, 'updateCostManual']);
     });
 
-    
+
     Route::middleware('role:super_admin,admin')->group(function () {
     Route::post('/offices/{officeId}/safe',  [OfficeSafeController::class, 'updateBalance']);
     Route::post('/safes/adjust',             [SafeActionController::class, 'adjust']);
