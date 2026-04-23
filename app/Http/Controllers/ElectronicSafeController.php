@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
-use App\Models\OfficeSafe;
 use App\Models\ElectronicSafe;
 use App\Models\ElectronicSafeLog;
 
@@ -73,27 +72,10 @@ class ElectronicSafeController extends Controller
             $currencyType = $request->currency_type;
             $note         = $request->note ?? null;
 
-            // تكلفة الشراء بالدولار + العمولة
-            $usdBase          = $this->calcUsdCost($currencyType, $amount, $exchangeRate);
-            $commission       = ($usdBase * $commRate) / 100;
-            $totalUsdDeducted = $usdBase + $commission;
+            // العمولة تُحسب فقط للسجل — لا يوجد خصم من أي خزنة خارجية
+            $commission = ($amount * $commRate) / 100;
 
-            // خزنة المكتب
-            $officeSafe = OfficeSafe::where('office_id', $user->office_id)
-                ->lockForUpdate()->first();
-
-            if (!$officeSafe) {
-                return response()->json(['message' => 'خزنة المكتب غير موجودة'], 404);
-            }
-
-            if ($officeSafe->balance < $totalUsdDeducted) {
-                return response()->json([
-                    'message' => 'رصيد الدولار في الخزنة غير كافٍ — المطلوب: $' . number_format($totalUsdDeducted, 4),
-                ], 400);
-            }
-
-            $officeSafe->decrement('balance', $totalUsdDeducted);
-
+            // الخزنة الإلكترونية فقط — تزيد بمقدار amount
             $eSafe = ElectronicSafe::firstOrCreate(['office_id' => $user->office_id]);
             $eSafe->increment($currencyType, $amount);
 
@@ -103,7 +85,7 @@ class ElectronicSafeController extends Controller
                 'action_type'     => 'buy',
                 'amount'          => $amount,
                 'commission_rate' => $commRate,
-                'net_amount'      => $totalUsdDeducted,
+                'net_amount'      => $amount,
                 'profit'          => $commission,
                 'note'            => $note ?? "شراء {$currencyType} | سعر: {$exchangeRate} | عمولة: {$commRate}%",
             ]);
@@ -112,13 +94,10 @@ class ElectronicSafeController extends Controller
                 'status'  => 'success',
                 'message' => 'تمت عملية الشراء بنجاح',
                 'details' => [
-                    'currency_type'        => $currencyType,
-                    'amount_bought'        => $amount,
-                    'usd_base_cost'        => round($usdBase, 4),
-                    'commission_usd'       => round($commission, 4),
-                    'total_usd_deducted'   => round($totalUsdDeducted, 4),
-                    'office_balance_after' => (float) $officeSafe->fresh()->balance,
-                    'esafe_balance_after'  => (float) $eSafe->fresh()->$currencyType,
+                    'currency_type'       => $currencyType,
+                    'amount_bought'       => $amount,
+                    'commission'          => round($commission, 4),
+                    'esafe_balance_after' => (float) $eSafe->fresh()->$currencyType,
                 ],
             ], 200);
         });
@@ -157,21 +136,11 @@ class ElectronicSafeController extends Controller
                 ], 400);
             }
 
-            // المبلغ المُضاف بالدولار
-            $usdGross    = $this->calcUsdReceived($currencyType, $amount, $exchangeRate);
-            $commission  = ($usdGross * $commRate) / 100;
-            $netUsdAdded = $usdGross - $commission;
+            // العمولة تُحسب فقط للسجل — لا يوجد إضافة لأي خزنة خارجية
+            $commission = ($amount * $commRate) / 100;
 
-            // خزنة المكتب
-            $officeSafe = OfficeSafe::where('office_id', $user->office_id)
-                ->lockForUpdate()->first();
-
-            if (!$officeSafe) {
-                return response()->json(['message' => 'خزنة المكتب غير موجودة'], 404);
-            }
-
+            // الخزنة الإلكترونية فقط — تنقص بمقدار amount
             $eSafe->decrement($currencyType, $amount);
-            $officeSafe->increment('balance', $netUsdAdded);
 
             ElectronicSafeLog::create([
                 'office_id'       => $user->office_id,
@@ -179,7 +148,7 @@ class ElectronicSafeController extends Controller
                 'action_type'     => 'sell',
                 'amount'          => $amount,
                 'commission_rate' => $commRate,
-                'net_amount'      => $netUsdAdded,
+                'net_amount'      => $amount,
                 'profit'          => $commission,
                 'note'            => $note ?? "بيع {$currencyType} | سعر: {$exchangeRate} | عمولة: {$commRate}%",
             ]);
@@ -188,13 +157,10 @@ class ElectronicSafeController extends Controller
                 'status'  => 'success',
                 'message' => 'تمت عملية البيع بنجاح',
                 'details' => [
-                    'currency_type'         => $currencyType,
-                    'amount_sold'           => $amount,
-                    'usd_gross'             => round($usdGross, 4),
-                    'commission_usd'        => round($commission, 4),
-                    'net_usd_added'         => round($netUsdAdded, 4),
-                    'office_balance_after'  => (float) $officeSafe->fresh()->balance,
-                    'esafe_balance_after'   => (float) $eSafe->fresh()->$currencyType,
+                    'currency_type'       => $currencyType,
+                    'amount_sold'         => $amount,
+                    'commission'          => round($commission, 4),
+                    'esafe_balance_after' => (float) $eSafe->fresh()->$currencyType,
                 ],
             ], 200);
         });
@@ -231,24 +197,4 @@ class ElectronicSafeController extends Controller
         ]);
     }
 
-    /* ── Helpers ── */
-    private function calcUsdCost(string $type, float $amount, float $rate): float
-    {
-        return match ($type) {
-            'syp_sham_cash' => $amount / $rate,   // ليرة → دولار
-            'usd_sham_cash' => $amount,            // دولار → دولار
-            'usdt'          => $amount * $rate,    // USDT * سعر$/USDT
-            default         => $amount,
-        };
-    }
-
-    private function calcUsdReceived(string $type, float $amount, float $rate): float
-    {
-        return match ($type) {
-            'syp_sham_cash' => $amount / $rate,
-            'usd_sham_cash' => $amount,
-            'usdt'          => $amount * $rate,
-            default         => $amount,
-        };
-    }
 }
