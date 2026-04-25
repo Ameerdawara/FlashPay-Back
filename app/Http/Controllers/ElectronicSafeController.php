@@ -128,64 +128,77 @@ class ElectronicSafeController extends Controller
        POST /electronic-safe/sell
        بيع: خصم من الخزنة الإلكترونية → زيادة في خزنة المكتب
     ═══════════════════════════════════════════════════ */
-    public function sell(Request $request)
-    {
-        $request->validate([
-            'currency_type'   => 'required|in:syp_sham_cash,usd_sham_cash,usdt',
-            'amount'          => 'required|numeric|min:0.01',
-            'commission_rate' => 'required|numeric|min:0|max:100',
-            'exchange_rate'   => 'required|numeric|min:0.000001',
-            'note'            => 'nullable|string|max:500',
+  public function sell(Request $request)
+{
+    $request->validate([
+        'currency_type'   => 'required|in:syp_sham_cash,usd_sham_cash,usdt',
+        'amount'          => 'required|numeric|min:0.01',
+        'commission_rate' => 'required|numeric|min:0|max:100',
+        'exchange_rate'   => 'required|numeric|min:0.000001',
+        'note'            => 'nullable|string|max:500',
+    ]);
+
+    return DB::transaction(function () use ($request) {
+        $user         = Auth::user();
+        $amount       = (float) $request->amount;
+        $commRate     = (float) $request->commission_rate;
+        $exchangeRate = (float) $request->exchange_rate;
+        $currencyType = $request->currency_type;
+        $note         = $request->note ?? null;
+
+        // 1. حساب الربح والمبلغ الإجمالي (الذي سيدفعه الزبون للمكتب)
+        $profit = ($amount * $commRate) / 100;
+        $totalToDeposit = $amount + $profit;
+
+        // 2. التحقق من رصيد الخزنة الإلكترونية وخصمه
+        $eSafe = ElectronicSafe::where('office_id', $user->office_id)->lockForUpdate()->first();
+
+        if (!$eSafe || $eSafe->$currencyType < $amount) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'رصيد الخزنة الإلكترونية غير كافٍ — المتاح: ' . number_format($eSafe?->$currencyType ?? 0, 2),
+            ], 400);
+        }
+
+        $eSafe->decrement($currencyType, $amount);
+
+        // 3. التعديل الجديد: زيادة الخزنة الورقية للمكتب (سوري أو دولار)
+        $isSyrian = ($currencyType === 'syp_sham_cash');
+        $officeSafeField = $isSyrian ? 'balance_sy' : 'balance';
+        
+        $officeSafe = OfficeSafe::where('office_id', $user->office_id)->lockForUpdate()->first();
+        if (!$officeSafe) {
+            return response()->json(['message' => 'خزنة المكتب غير موجودة'], 404);
+        }
+
+        // << هنا تتم زيادة الخزنة الورقية بأصل المبلغ + عمولة المكتب >>
+        $officeSafe->increment($officeSafeField, $totalToDeposit);
+
+        // 4. توثيق العملية في السجلات
+        ElectronicSafeLog::create([
+            'office_id'       => $user->office_id,
+            'currency_type'   => $currencyType,
+            'action_type'     => 'sell',
+            'amount'          => $amount,
+            'commission_rate' => $commRate,
+            'net_amount'      => $totalToDeposit,
+            'profit'          => $profit,
+            'note'            => $note ?? "بيع {$currencyType} | سعر: {$exchangeRate} | عمولة: {$commRate}%",
         ]);
 
-        return DB::transaction(function () use ($request) {
-            $user         = Auth::user();
-            $amount       = (float) $request->amount;
-            $commRate     = (float) $request->commission_rate;
-            $exchangeRate = (float) $request->exchange_rate;
-            $currencyType = $request->currency_type;
-            $note         = $request->note ?? null;
-
-            // التحقق من رصيد الخزنة الإلكترونية
-            $eSafe = ElectronicSafe::where('office_id', $user->office_id)
-                ->lockForUpdate()->first();
-
-            if (!$eSafe || $eSafe->$currencyType < $amount) {
-                return response()->json([
-                    'message' => 'رصيد الخزنة الإلكترونية غير كافٍ — المتاح: '
-                                 . number_format($eSafe?->$currencyType ?? 0, 2),
-                ], 400);
-            }
-
-            // العمولة تُحسب فقط للسجل — لا يوجد إضافة لأي خزنة خارجية
-            $commission = ($amount * $commRate) / 100;
-
-            // الخزنة الإلكترونية فقط — تنقص بمقدار amount
-            $eSafe->decrement($currencyType, $amount);
-
-            ElectronicSafeLog::create([
-                'office_id'       => $user->office_id,
-                'currency_type'   => $currencyType,
-                'action_type'     => 'sell',
-                'amount'          => $amount,
-                'commission_rate' => $commRate,
-                'net_amount'      => $amount,
-                'profit'          => $commission,
-                'note'            => $note ?? "بيع {$currencyType} | سعر: {$exchangeRate} | عمولة: {$commRate}%",
-            ]);
-
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'تمت عملية البيع بنجاح',
-                'details' => [
-                    'currency_type'       => $currencyType,
-                    'amount_sold'         => $amount,
-                    'commission'          => round($commission, 4),
-                    'esafe_balance_after' => (float) $eSafe->fresh()->$currencyType,
-                ],
-            ], 200);
-        });
-    }
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'تمت عملية البيع بنجاح',
+            'details' => [
+                'currency_type'        => $currencyType,
+                'amount_sold'          => $amount,
+                'commission'           => round($profit, 4),
+                'esafe_balance_after'  => (float) $eSafe->fresh()->$currencyType,
+                'office_balance_after' => (float) $officeSafe->fresh()->$officeSafeField, // الرصيد الورقي الجديد
+            ],
+        ], 200);
+    });
+}
 
     /* ═══════════════════════════════════════════════════
        GET /electronic-safe/logs
