@@ -10,31 +10,25 @@ use Illuminate\Support\Facades\Auth;
 
 class OfficeSafeController extends Controller
 {
-    // ─── مساعد: كتابة سجل بـ SAVEPOINT لعزله عن الـ transaction الرئيسية ──
     private function logAction(array $data): void
     {
         try {
-            DB::statement('SAVEPOINT log_action_savepoint');
-
             DB::table('safe_action_logs')->insert(array_merge([
                 'created_at' => now(),
                 'updated_at' => now(),
             ], $data));
-
-            DB::statement('RELEASE SAVEPOINT log_action_savepoint');
-
         } catch (\Exception $e) {
-            try {
-                DB::statement('ROLLBACK TO SAVEPOINT log_action_savepoint');
-            } catch (\Exception) {
-                // لا توجد transaction نشطة — نتجاهل
-            }
+            // الجدول غير موجود بعد — نتجاهل الخطأ
         }
     }
 
     /**
      * POST /offices/{officeId}/safe
      * body: { amount, type: deposit|withdraw, currency: usd|sy }
+     *
+     * إيداع SYP → office_safe.balance_sy += X  &&  trading_safe.balance_sy += X
+     * سحب   SYP → office_safe.balance_sy -= X  &&  trading_safe.balance_sy -= X
+     * USD        → office_safe.balance فقط
      */
     public function updateBalance(Request $request, $officeId)
     {
@@ -57,22 +51,17 @@ class OfficeSafeController extends Controller
                 ->lockForUpdate()->first();
 
             if (!$officeSafe) {
-                // ✅ throw بدلاً من return داخل transaction — مهم لـ PostgreSQL
-                throw new \Exception('هذا المكتب لا يملك خزنة!');
+                return response()->json(['message' => 'هذا المكتب لا يملك خزنة!'], 404);
             }
 
             // ── دولار USD ─────────────────────────────────────────────────
             if ($currency === 'usd') {
                 if (!$isDeposit && $officeSafe->balance < $amount) {
-                    throw new \Exception('رصيد الدولار في الخزنة غير كافٍ!');
+                    return response()->json(['message' => 'رصيد الدولار في الخزنة غير كافٍ!'], 400);
                 }
-
                 $isDeposit
                     ? $officeSafe->increment('balance', $amount)
                     : $officeSafe->decrement('balance', $amount);
-
-                // نقرأ الرصيد مرة واحدة فقط
-                $freshSafe = $officeSafe->fresh();
 
                 $this->logAction([
                     'office_id'        => $officeId,
@@ -83,13 +72,14 @@ class OfficeSafeController extends Controller
                     'description'      => ($isDeposit ? 'إيداع دولار' : 'سحب دولار') . ' في خزنة المكتب'
                                        . ($notes ? " — {$notes}" : ''),
                     'performed_by'     => $user?->id,
-                    'balance_after'    => $freshSafe->balance,
-                    'balance_sy_after' => $freshSafe->balance_sy,
+                    'balance_after'    => $officeSafe->fresh()->balance,
+                    'balance_sy_after' => $officeSafe->fresh()->balance_sy,
+
                 ]);
 
                 return response()->json([
                     'status'      => 'success',
-                    'new_balance' => $freshSafe->balance,
+                    'new_balance' => $officeSafe->fresh()->balance,
                     'field'       => 'balance',
                     'message'     => 'تم تحديث رصيد الدولار بنجاح',
                 ]);
@@ -97,7 +87,7 @@ class OfficeSafeController extends Controller
 
             // ── ليرة سورية SYP ────────────────────────────────────────────
             if (!$isDeposit && $officeSafe->balance_sy < $amount) {
-                throw new \Exception('رصيد الليرة السورية في الخزنة غير كافٍ!');
+                return response()->json(['message' => 'رصيد الليرة السورية في الخزنة غير كافٍ!'], 400);
             }
 
             $isDeposit
@@ -108,8 +98,6 @@ class OfficeSafeController extends Controller
                 ->where('currency_id', 1)
                 ->lockForUpdate()->first();
 
-            $freshSafe = $officeSafe->fresh();
-
             $this->logAction([
                 'office_id'        => $officeId,
                 'safe_type'        => 'office_safe',
@@ -118,15 +106,15 @@ class OfficeSafeController extends Controller
                 'amount'           => $amount,
                 'description'      => ($isDeposit ? 'إيداع ليرة سورية' : 'سحب ليرة سورية') . ' في خزنة المكتب'
                                    . ($notes ? " — {$notes}" : ''),
-                'performed_by'     => $user?->id,
-                'balance_after'    => $freshSafe->balance,
-                'balance_sy_after' => $freshSafe->balance_sy,
+                'performed_by'     => $user->id,
+                'balance_after'    => $officeSafe->fresh()->balance,
+                'balance_sy_after' => $officeSafe->fresh()->balance_sy,
             ]);
 
             return response()->json([
                 'status'             => 'success',
-                'new_balance_sy'     => $freshSafe->balance_sy,
-                'trading_balance_sy' => $tradingSafe?->fresh()->balance_sy ?? 0,
+                'new_balance_sy'     => $officeSafe->fresh()->balance_sy,
+                'trading_balance_sy' => $tradingSafe ? $tradingSafe->fresh()->balance_sy : 0,
                 'field'              => 'balance_sy',
                 'message'            => 'تم تحديث رصيد الليرة السورية بنجاح',
             ]);
