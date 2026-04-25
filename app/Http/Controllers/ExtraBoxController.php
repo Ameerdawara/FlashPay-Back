@@ -39,25 +39,31 @@ class ExtraBoxController extends Controller
 
         if ($debit > 0) {
             $this->writeLog([
-                'office_id'     => $box->office_id,
-                'action_type'   => 'deposit',
-                'amount'        => $debit,
-                'description'   => "إيداع أولي (منه) عند إنشاء صندوق: {$box->name}",
-                'performed_by'  => $request->user()?->id,
-                'balance_after' => $box->amount,
-                'notes'         => null,
+                'office_id'        => $box->office_id,
+                'safe_type'        => 'extra_box',
+                'action_type'      => 'deposit',
+                'currency'         => 'USD',
+                'amount'           => $debit,
+                'description'      => "إيداع أولي (منه) عند إنشاء صندوق: {$box->name}",
+                'performed_by'     => $request->user()?->id,
+                'balance_after'    => $box->amount,
+                'balance_sy_after' => 0,
+                'notes'            => null,
             ]);
         }
 
         if ($credit > 0) {
             $this->writeLog([
-                'office_id'     => $box->office_id,
-                'action_type'   => 'withdraw',
-                'amount'        => $credit,
-                'description'   => "مديونية أولية (عليه) عند إنشاء صندوق: {$box->name}",
-                'performed_by'  => $request->user()?->id,
-                'balance_after' => $box->amount,
-                'notes'         => null,
+                'office_id'        => $box->office_id,
+                'safe_type'        => 'extra_box',
+                'action_type'      => 'withdraw',
+                'currency'         => 'USD',
+                'amount'           => $credit,
+                'description'      => "مديونية أولية (عليه) عند إنشاء صندوق: {$box->name}",
+                'performed_by'     => $request->user()?->id,
+                'balance_after'    => $box->amount,
+                'balance_sy_after' => 0,
+                'notes'            => null,
             ]);
         }
 
@@ -95,18 +101,20 @@ class ExtraBoxController extends Controller
                 $box = ExtraBox::where('id', $id)->lockForUpdate()->firstOrFail();
                 $box->increment('amount', (float)$request->amount);
 
-                // ✅ نحفظ البيانات قبل الـ log لأن fresh() يعمل داخل نفس الـ transaction
                 $newBalance = $box->fresh()->amount;
 
                 $this->writeLog([
-                    'office_id'     => $box->office_id,
-                    'action_type'   => 'deposit',
-                    'amount'        => (float)$request->amount,
-                    'description'   => "إيداع في صندوق إضافي: {$box->name}"
-                                     . ($request->notes ? " — {$request->notes}" : ''),
-                    'performed_by'  => $request->user()?->id,
-                    'balance_after' => $newBalance,
-                    'notes'         => $request->notes,
+                    'office_id'        => $box->office_id,
+                    'safe_type'        => 'extra_box',
+                    'action_type'      => 'deposit',
+                    'currency'         => 'USD',
+                    'amount'           => (float)$request->amount,
+                    'description'      => "إيداع في صندوق إضافي: {$box->name}"
+                                       . ($request->notes ? " — {$request->notes}" : ''),
+                    'performed_by'     => $request->user()?->id,
+                    'balance_after'    => $newBalance,
+                    'balance_sy_after' => 0,
+                    'notes'            => $request->notes,
                 ]);
 
                 return response()->json([
@@ -141,14 +149,17 @@ class ExtraBoxController extends Controller
                 $newBalance = $box->fresh()->amount;
 
                 $this->writeLog([
-                    'office_id'     => $box->office_id,
-                    'action_type'   => 'withdraw',
-                    'amount'        => (float)$request->amount,
-                    'description'   => "سحب من صندوق إضافي: {$box->name}"
-                                     . ($request->notes ? " — {$request->notes}" : ''),
-                    'performed_by'  => $request->user()?->id,
-                    'balance_after' => $newBalance,
-                    'notes'         => $request->notes,
+                    'office_id'        => $box->office_id,
+                    'safe_type'        => 'extra_box',
+                    'action_type'      => 'withdraw',
+                    'currency'         => 'USD',
+                    'amount'           => (float)$request->amount,
+                    'description'      => "سحب من صندوق إضافي: {$box->name}"
+                                       . ($request->notes ? " — {$request->notes}" : ''),
+                    'performed_by'     => $request->user()?->id,
+                    'balance_after'    => $newBalance,
+                    'balance_sy_after' => 0,
+                    'notes'            => $request->notes,
                 ]);
 
                 return response()->json([
@@ -186,26 +197,34 @@ class ExtraBoxController extends Controller
 
                 $boxBalance        = $box->fresh()->amount;
                 $officeSafeBalance = $officeSafe->fresh()->balance;
+                $officeSafeBalanceSy = $officeSafe->fresh()->balance_sy ?? 0;
 
+                // ─ log الصندوق الإضافي (المُرسِل) ─
                 $this->writeLog([
-                    'office_id'     => $box->office_id,
-                    'action_type'   => 'transfer',
-                    'amount'        => (float)$request->amount,
-                    'description'   => "تحويل من صندوق [{$box->name}] إلى خزنة المكتب — {$request->notes}",
-                    'performed_by'  => $request->user()?->id,
-                    'balance_after' => $boxBalance,
-                    'notes'         => $request->notes,
+                    'office_id'        => $box->office_id,
+                    'safe_type'        => 'extra_box',
+                    'action_type'      => 'transfer',
+                    'currency'         => 'USD',
+                    'amount'           => (float)$request->amount,
+                    'description'      => "تحويل من صندوق [{$box->name}] إلى خزنة المكتب — {$request->notes}",
+                    'performed_by'     => $request->user()?->id,
+                    'balance_after'    => $boxBalance,
+                    'balance_sy_after' => 0,
+                    'notes'            => $request->notes,
                 ]);
 
+                // ─ log خزنة المكتب (المُستقبِل) ─
                 $this->writeLog([
-                    'office_id'     => $box->office_id,
-                    'safe_type'     => 'office_safe',
-                    'action_type'   => 'deposit',
-                    'amount'        => (float)$request->amount,
-                    'description'   => "استلام من صندوق [{$box->name}] — {$request->notes}",
-                    'performed_by'  => $request->user()?->id,
-                    'balance_after' => $officeSafeBalance,
-                    'notes'         => $request->notes,
+                    'office_id'        => $box->office_id,
+                    'safe_type'        => 'office_safe',
+                    'action_type'      => 'deposit',
+                    'currency'         => 'USD',
+                    'amount'           => (float)$request->amount,
+                    'description'      => "استلام من صندوق [{$box->name}] — {$request->notes}",
+                    'performed_by'     => $request->user()?->id,
+                    'balance_after'    => $officeSafeBalance,
+                    'balance_sy_after' => $officeSafeBalanceSy,
+                    'notes'            => $request->notes,
                 ]);
 
                 return response()->json([
@@ -230,25 +249,19 @@ class ExtraBoxController extends Controller
     // ─── مساعد: كتابة سجل بـ SAVEPOINT لعزله عن الـ transaction الرئيسية ──
     private function writeLog(array $data): void
     {
-        // ✅ الحل الجذري لـ PostgreSQL:
         // نستخدم SAVEPOINT لعزل insert الـ log عن الـ transaction الرئيسية.
-        // إن فشل الـ insert (مثلاً الجدول غير موجود)، نعمل ROLLBACK TO SAVEPOINT
-        // فقط دون أن نُلوّث الـ transaction الخارجية — وهذا ما كان يسبب SQLSTATE[25P02].
+        // إن فشل الـ insert، نعمل ROLLBACK TO SAVEPOINT فقط دون تلويث الـ transaction الخارجية.
         try {
             DB::statement('SAVEPOINT write_log_savepoint');
 
             DB::table('safe_action_logs')->insert(array_merge([
-                'safe_type'        => 'extra_box',
-                'currency'         => 'USD',
-                'balance_sy_after' => 0,
-                'created_at'       => now(),
-                'updated_at'       => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
             ], $data));
 
             DB::statement('RELEASE SAVEPOINT write_log_savepoint');
 
         } catch (\Exception $e) {
-            // أعد الـ transaction إلى ما قبل محاولة الـ insert الفاشلة
             try {
                 DB::statement('ROLLBACK TO SAVEPOINT write_log_savepoint');
             } catch (\Exception) {
