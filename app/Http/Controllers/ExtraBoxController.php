@@ -17,9 +17,6 @@ class ExtraBoxController extends Controller
     /**
      * POST /extra-boxes
      * body: { name, amount_debit, amount_credit, office_id }
-     * amount_debit  = مبلغ "منه"  (رصيد موجود في الصندوق)
-     * amount_credit = مبلغ "عليه" (مديونية على الصندوق، يُحفظ سالباً)
-     * الرصيد الصافي = amount_debit - amount_credit
      */
     public function store(Request $request)
     {
@@ -32,7 +29,7 @@ class ExtraBoxController extends Controller
 
         $debit  = (float)($request->amount_debit  ?? 0);
         $credit = (float)($request->amount_credit ?? 0);
-        $net    = $debit - $credit;          // يمكن أن يكون سالباً
+        $net    = $debit - $credit;
 
         $box = ExtraBox::create([
             'name'      => $request->name,
@@ -40,7 +37,6 @@ class ExtraBoxController extends Controller
             'office_id' => $request->office_id,
         ]);
 
-        // سجّل الإيداع الأولي إن كان منه > 0
         if ($debit > 0) {
             $this->writeLog([
                 'office_id'     => $box->office_id,
@@ -52,7 +48,7 @@ class ExtraBoxController extends Controller
                 'notes'         => null,
             ]);
         }
-        // سجّل المديونية إن كان عليه > 0
+
         if ($credit > 0) {
             $this->writeLog([
                 'office_id'     => $box->office_id,
@@ -96,9 +92,11 @@ class ExtraBoxController extends Controller
 
         try {
             return DB::transaction(function () use ($request, $id) {
-                // ✅ PostgreSQL-safe: where + lockForUpdate + firstOrFail
                 $box = ExtraBox::where('id', $id)->lockForUpdate()->firstOrFail();
                 $box->increment('amount', (float)$request->amount);
+
+                // ✅ نحفظ البيانات قبل الـ log لأن fresh() يعمل داخل نفس الـ transaction
+                $newBalance = $box->fresh()->amount;
 
                 $this->writeLog([
                     'office_id'     => $box->office_id,
@@ -107,14 +105,14 @@ class ExtraBoxController extends Controller
                     'description'   => "إيداع في صندوق إضافي: {$box->name}"
                                      . ($request->notes ? " — {$request->notes}" : ''),
                     'performed_by'  => $request->user()?->id,
-                    'balance_after' => $box->fresh()->amount,
+                    'balance_after' => $newBalance,
                     'notes'         => $request->notes,
                 ]);
 
                 return response()->json([
                     'status'      => 'success',
                     'message'     => 'تم الإيداع بنجاح',
-                    'new_balance' => $box->fresh()->amount,
+                    'new_balance' => $newBalance,
                 ]);
             });
         } catch (\Exception $e) {
@@ -134,12 +132,13 @@ class ExtraBoxController extends Controller
             return DB::transaction(function () use ($request, $id) {
                 $box = ExtraBox::where('id', $id)->lockForUpdate()->firstOrFail();
 
-                // ✅ throw بدلاً من return داخل transaction لمنع خطأ PostgreSQL
                 if ($box->amount < (float)$request->amount) {
                     throw new \Exception('الرصيد غير كافٍ في الصندوق');
                 }
 
                 $box->decrement('amount', (float)$request->amount);
+
+                $newBalance = $box->fresh()->amount;
 
                 $this->writeLog([
                     'office_id'     => $box->office_id,
@@ -148,14 +147,14 @@ class ExtraBoxController extends Controller
                     'description'   => "سحب من صندوق إضافي: {$box->name}"
                                      . ($request->notes ? " — {$request->notes}" : ''),
                     'performed_by'  => $request->user()?->id,
-                    'balance_after' => $box->fresh()->amount,
+                    'balance_after' => $newBalance,
                     'notes'         => $request->notes,
                 ]);
 
                 return response()->json([
                     'status'      => 'success',
                     'message'     => 'تم السحب بنجاح',
-                    'new_balance' => $box->fresh()->amount,
+                    'new_balance' => $newBalance,
                 ]);
             });
         } catch (\Exception $e) {
@@ -175,7 +174,6 @@ class ExtraBoxController extends Controller
             return DB::transaction(function () use ($request, $id) {
                 $box = ExtraBox::where('id', $id)->lockForUpdate()->firstOrFail();
 
-                // ✅ throw بدلاً من return داخل transaction
                 if ($box->amount < (float)$request->amount) {
                     throw new \Exception('الرصيد غير كافٍ في الصندوق');
                 }
@@ -186,18 +184,19 @@ class ExtraBoxController extends Controller
                 $box->decrement('amount', (float)$request->amount);
                 $officeSafe->increment('balance', (float)$request->amount);
 
-                // سجل الخروج من extra_box
+                $boxBalance        = $box->fresh()->amount;
+                $officeSafeBalance = $officeSafe->fresh()->balance;
+
                 $this->writeLog([
                     'office_id'     => $box->office_id,
                     'action_type'   => 'transfer',
                     'amount'        => (float)$request->amount,
                     'description'   => "تحويل من صندوق [{$box->name}] إلى خزنة المكتب — {$request->notes}",
                     'performed_by'  => $request->user()?->id,
-                    'balance_after' => $box->fresh()->amount,
+                    'balance_after' => $boxBalance,
                     'notes'         => $request->notes,
                 ]);
 
-                // سجل الدخول في office_safe
                 $this->writeLog([
                     'office_id'     => $box->office_id,
                     'safe_type'     => 'office_safe',
@@ -205,15 +204,15 @@ class ExtraBoxController extends Controller
                     'amount'        => (float)$request->amount,
                     'description'   => "استلام من صندوق [{$box->name}] — {$request->notes}",
                     'performed_by'  => $request->user()?->id,
-                    'balance_after' => $officeSafe->fresh()->balance,
+                    'balance_after' => $officeSafeBalance,
                     'notes'         => $request->notes,
                 ]);
 
                 return response()->json([
                     'status'              => 'success',
                     'message'             => 'تم التحويل إلى خزنة المكتب بنجاح',
-                    'box_balance'         => $box->fresh()->amount,
-                    'office_safe_balance' => $officeSafe->fresh()->balance,
+                    'box_balance'         => $boxBalance,
+                    'office_safe_balance' => $officeSafeBalance,
                 ]);
             });
         } catch (\Exception $e) {
@@ -228,10 +227,16 @@ class ExtraBoxController extends Controller
         return response()->json(['status' => 'success', 'message' => 'تم حذف الصندوق بنجاح'], 200);
     }
 
-    // ─── مساعد: كتابة سجل ────────────────────────────────────────────────
+    // ─── مساعد: كتابة سجل بـ SAVEPOINT لعزله عن الـ transaction الرئيسية ──
     private function writeLog(array $data): void
     {
+        // ✅ الحل الجذري لـ PostgreSQL:
+        // نستخدم SAVEPOINT لعزل insert الـ log عن الـ transaction الرئيسية.
+        // إن فشل الـ insert (مثلاً الجدول غير موجود)، نعمل ROLLBACK TO SAVEPOINT
+        // فقط دون أن نُلوّث الـ transaction الخارجية — وهذا ما كان يسبب SQLSTATE[25P02].
         try {
+            DB::statement('SAVEPOINT write_log_savepoint');
+
             DB::table('safe_action_logs')->insert(array_merge([
                 'safe_type'        => 'extra_box',
                 'currency'         => 'USD',
@@ -239,8 +244,16 @@ class ExtraBoxController extends Controller
                 'created_at'       => now(),
                 'updated_at'       => now(),
             ], $data));
+
+            DB::statement('RELEASE SAVEPOINT write_log_savepoint');
+
         } catch (\Exception $e) {
-            // جدول غير موجود بعد — نتجاهل
+            // أعد الـ transaction إلى ما قبل محاولة الـ insert الفاشلة
+            try {
+                DB::statement('ROLLBACK TO SAVEPOINT write_log_savepoint');
+            } catch (\Exception) {
+                // إن لم تكن هناك transaction نشطة أصلاً، نتجاهل
+            }
         }
     }
 }
