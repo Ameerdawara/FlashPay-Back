@@ -207,9 +207,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // تعديل حالة الحوالات
         Route::patch('/transfers/{id}/update-status', [TransferController::class, 'update']);
-Route::apiResource('extra-boxes', ExtraBoxController::class);
-        Route::get('/extra-boxes',        [ExtraBoxController::class, 'index']);
-        Route::get('/extra-boxes/{id}',   [ExtraBoxController::class, 'show']);
+
+        // الصناديق الإضافية
+        Route::get('/extra-boxes',                              [ExtraBoxController::class, 'index']);
+        Route::post('/extra-boxes',                             [ExtraBoxController::class, 'store']);
+        Route::get('/extra-boxes/{id}',                        [ExtraBoxController::class, 'show']);
+        Route::put('/extra-boxes/{id}',                        [ExtraBoxController::class, 'update']);
+        Route::delete('/extra-boxes/{id}',                     [ExtraBoxController::class, 'destroy']);
+        Route::post('/extra-boxes/{id}/deposit',               [ExtraBoxController::class, 'deposit']);
+        Route::post('/extra-boxes/{id}/withdraw',              [ExtraBoxController::class, 'withdraw']);
+        Route::post('/extra-boxes/{id}/transfer-to-office',    [ExtraBoxController::class, 'transferToOfficeSafe']);
     });
 
     // ─── 5. Super Admin + Admin + Accountant ─────────────────────────────
