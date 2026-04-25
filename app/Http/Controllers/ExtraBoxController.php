@@ -249,24 +249,13 @@ class ExtraBoxController extends Controller
     // ─── مساعد: كتابة سجل بـ SAVEPOINT لعزله عن الـ transaction الرئيسية ──
     private function writeLog(array $data): void
     {
-        // نستخدم SAVEPOINT لعزل insert الـ log عن الـ transaction الرئيسية.
-        // إن فشل الـ insert، نعمل ROLLBACK TO SAVEPOINT فقط دون تلويث الـ transaction الخارجية.
         try {
-            DB::statement('SAVEPOINT write_log_savepoint');
-
             DB::table('safe_action_logs')->insert(array_merge([
                 'created_at' => now(),
                 'updated_at' => now(),
             ], $data));
-
-            DB::statement('RELEASE SAVEPOINT write_log_savepoint');
-
         } catch (\Exception $e) {
-            try {
-                DB::statement('ROLLBACK TO SAVEPOINT write_log_savepoint');
-            } catch (\Exception) {
-                // إن لم تكن هناك transaction نشطة أصلاً، نتجاهل
-            }
+            // الجدول غير موجود بعد — نتجاهل الخطأ
         }
     }
 }
