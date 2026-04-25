@@ -10,30 +10,6 @@ use Illuminate\Support\Facades\DB;
 
 class SafeActionController extends Controller
 {
-    // ─── مساعد: كتابة سجل بـ SAVEPOINT لعزله عن الـ transaction الرئيسية ──
-    private function writeLog(array $data): void
-    {
-        try {
-            DB::statement('SAVEPOINT safe_action_log_savepoint');
-
-            DB::table('safe_action_logs')->insert(array_merge([
-                'currency'         => 'USD',
-                'balance_sy_after' => 0,
-                'created_at'       => now(),
-                'updated_at'       => now(),
-            ], $data));
-
-            DB::statement('RELEASE SAVEPOINT safe_action_log_savepoint');
-
-        } catch (\Exception $e) {
-            try {
-                DB::statement('ROLLBACK TO SAVEPOINT safe_action_log_savepoint');
-            } catch (\Exception) {
-                // لا توجد transaction نشطة — نتجاهل
-            }
-        }
-    }
-
     public function adjust(Request $request)
     {
         $request->validate([
@@ -85,17 +61,23 @@ class SafeActionController extends Controller
                 $fromSafe->decrement('balance', $request->amount);
                 $toSafe->increment('balance', $request->amount);
 
-                $this->writeLog([
-                    'office_id'   => $request->office_id,
-                    'safe_type'   => 'office_safe',
-                    'action_type' => 'transfer',
-                    'amount'      => $request->amount,
-                    'description' => 'تحويل من خزنة المكتب إلى '
-                                   . ($request->to_type === 'office_main' ? 'الصندوق الرئيسي' : 'صندوق التداول')
-                                   . ($request->notes ? " — {$request->notes}" : ''),
-                    'performed_by'  => $request->user()?->id,
-                    'balance_after' => $fromSafe->fresh()->balance,
-                ]);
+                try {
+                    DB::table('safe_action_logs')->insert([
+                        'office_id'        => $request->office_id,
+                        'safe_type'        => 'office_safe',
+                        'action_type'      => 'transfer',
+                        'currency'         => 'USD',
+                        'amount'           => $request->amount,
+                        'description'      => 'تحويل من خزنة المكتب إلى '
+                                           . ($request->to_type === 'office_main' ? 'الصندوق الرئيسي' : 'صندوق التداول')
+                                           . ($request->notes ? " — {$request->notes}" : ''),
+                        'performed_by'     => $request->user()?->id,  // ✅ الإصلاح
+                        'balance_after'    => $fromSafe->fresh()->balance,
+                        'balance_sy_after' => 0,
+                        'created_at'       => now(),
+                        'updated_at'       => now(),
+                    ]);
+                } catch (\Exception $e) { /* جدول غير موجود بعد */ }
 
                 return response()->json(['status' => 'success', 'message' => 'تم التحويل بنجاح']);
             });
@@ -134,18 +116,24 @@ class SafeActionController extends Controller
                 $fromSafe->decrement('balance', $request->amount);
                 $toSafe->increment('balance', $request->amount);
 
-                $this->writeLog([
-                    'office_id'   => $request->office_id,
-                    'safe_type'   => $request->from_type,
-                    'action_type' => 'transfer_to_office',
-                    'amount'      => $request->amount,
-                    'description' => 'تحويل من '
-                                   . ($request->from_type === 'office_main' ? 'الصندوق الرئيسي' : 'صندوق التداول')
-                                   . ' إلى خزنة المكتب'
-                                   . ($request->notes ? " — {$request->notes}" : ''),
-                    'performed_by'  => $request->user()?->id,
-                    'balance_after' => $toSafe->fresh()->balance,
-                ]);
+                try {
+                    DB::table('safe_action_logs')->insert([
+                        'office_id'        => $request->office_id,
+                        'safe_type'        => $request->from_type,
+                        'action_type'      => 'transfer_to_office',
+                        'currency'         => 'USD',
+                        'amount'           => $request->amount,
+                        'description'      => 'تحويل من '
+                                           . ($request->from_type === 'office_main' ? 'الصندوق الرئيسي' : 'صندوق التداول')
+                                           . ' إلى خزنة المكتب'
+                                           . ($request->notes ? " — {$request->notes}" : ''),
+                        'performed_by'     => $request->user()?->id,  // ✅ الإصلاح
+                        'balance_after'    => $toSafe->fresh()->balance,
+                        'balance_sy_after' => 0,
+                        'created_at'       => now(),
+                        'updated_at'       => now(),
+                    ]);
+                } catch (\Exception $e) { /* جدول غير موجود بعد */ }
 
                 return response()->json([
                     'status'  => 'success',
