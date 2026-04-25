@@ -247,15 +247,16 @@ class ExtraBoxController extends Controller
     }
 
     // ─── مساعد: كتابة سجل بـ SAVEPOINT لعزله عن الـ transaction الرئيسية ──
-    private function writeLog(array $data): void
-    {
-        try {
-            DB::table('safe_action_logs')->insert(array_merge([
-                'created_at' => now(),
-                'updated_at' => now(),
-            ], $data));
-        } catch (\Exception $e) {
-            // الجدول غير موجود بعد — نتجاهل الخطأ
-        }
+   private function writeLog(array $data): void
+{
+    try {
+        DB::table('safe_action_logs')->insert(array_merge([
+            'created_at' => now(),
+            'updated_at' => now(),
+            'balance_sy_after' => 0, // إضافة قيمة افتراضية لتجنب خطأ الـ Database
+        ], $data));
+    } catch (\Exception $e) {
+        // نصيحة: سجل الخطأ لتعرف السبب الحقيقي
     }
+}
 }
