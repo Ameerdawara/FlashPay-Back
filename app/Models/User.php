@@ -20,7 +20,9 @@ class User extends Authenticatable
         'country_id',
         'city_id',
         'is_active',
-        'id_card_image'
+        'id_card_image',
+        'fcm_token',
+        'agent_profit_ratio',
     ];
     public function office()
     {
