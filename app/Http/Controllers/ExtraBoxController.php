@@ -48,7 +48,6 @@ class ExtraBoxController extends Controller
                 'performed_by'     => $request->user()?->id,
                 'balance_after'    => $box->amount,
                 'balance_sy_after' => 0,
-                'notes'            => null,
             ]);
         }
 
@@ -63,7 +62,6 @@ class ExtraBoxController extends Controller
                 'performed_by'     => $request->user()?->id,
                 'balance_after'    => $box->amount,
                 'balance_sy_after' => 0,
-                'notes'            => null,
             ]);
         }
 
@@ -114,7 +112,6 @@ class ExtraBoxController extends Controller
                     'performed_by'     => $request->user()?->id,
                     'balance_after'    => $newBalance,
                     'balance_sy_after' => 0,
-                    'notes'            => $request->notes,
                 ]);
 
                 return response()->json([
@@ -159,7 +156,6 @@ class ExtraBoxController extends Controller
                     'performed_by'     => $request->user()?->id,
                     'balance_after'    => $newBalance,
                     'balance_sy_after' => 0,
-                    'notes'            => $request->notes,
                 ]);
 
                 return response()->json([
@@ -210,7 +206,6 @@ class ExtraBoxController extends Controller
                     'performed_by'     => $request->user()?->id,
                     'balance_after'    => $boxBalance,
                     'balance_sy_after' => 0,
-                    'notes'            => $request->notes,
                 ]);
 
                 // ─ log خزنة المكتب (المُستقبِل) ─
@@ -224,7 +219,6 @@ class ExtraBoxController extends Controller
                     'performed_by'     => $request->user()?->id,
                     'balance_after'    => $officeSafeBalance,
                     'balance_sy_after' => $officeSafeBalanceSy,
-                    'notes'            => $request->notes,
                 ]);
 
                 return response()->json([
@@ -246,17 +240,16 @@ class ExtraBoxController extends Controller
         return response()->json(['status' => 'success', 'message' => 'تم حذف الصندوق بنجاح'], 200);
     }
 
-    // ─── مساعد: كتابة سجل بـ SAVEPOINT لعزله عن الـ transaction الرئيسية ──
-   private function writeLog(array $data): void
-{
-    try {
-        DB::table('safe_action_logs')->insert(array_merge([
-            'created_at' => now(),
-            'updated_at' => now(),
-            'balance_sy_after' => 0, // إضافة قيمة افتراضية لتجنب خطأ الـ Database
-        ], $data));
-    } catch (\Exception $e) {
-        // نصيحة: سجل الخطأ لتعرف السبب الحقيقي
+     // ─── مساعد: كتابة سجل الصناديق ───────────────────────────────────────
+    private function writeLog(array $data): void
+    {
+        try {
+            DB::table('safe_action_logs')->insert(array_merge([
+                'created_at' => now(),
+                'updated_at' => now(),
+            ], $data));
+        } catch (\Exception $e) {
+            // الجدول غير موجود بعد — نتجاهل الخطأ
+        }
     }
-}
 }
