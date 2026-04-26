@@ -51,6 +51,24 @@ Route::get('/run-cmd', function () {
     }
 });
 
+// ✅ migrate آمن — يُضيف الأعمدة الجديدة فقط بدون مسح البيانات
+Route::get('/run-migrate', function () {
+    try {
+        Artisan::call('migrate', ['--force' => true]);
+        $output = Artisan::output();
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'تم تشغيل الـ migrate بنجاح',
+            'output'  => $output,
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => $e->getMessage(),
+        ], 500);
+    }
+});
+
 /*
 |--------------------------------------------------------------------------
 | Public Routes
