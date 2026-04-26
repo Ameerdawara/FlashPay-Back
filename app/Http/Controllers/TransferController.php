@@ -495,10 +495,6 @@ class TransferController extends Controller
             $safe->update(['agent_profit_ratio' => $validated['agent_profit_ratio']]);
         }
 
-        // ✅ تحديث النسبة في جدول users أيضاً — لأن agentSafe يقرأها من $user->agent_profit_ratio
-        \App\Models\User::where('id', $validated['agent_id'])
-            ->update(['agent_profit_ratio' => $validated['agent_profit_ratio']]);
-
         return response()->json([
             'status'             => 'success',
             'message'            => 'تم تحديث نسبة ربح المندوب بنجاح',
@@ -541,12 +537,28 @@ class TransferController extends Controller
             return response()->json(['message' => 'غير مصرح'], 403);
         }
 
-        // تفريغ sender_id بدلاً من حذف الحوالات للحفاظ على السجل المالي
-        Transfer::where('sender_id', $id)->update(['sender_id' => null]);
+        // ✅ حذف الحوالات المرتبطة بالمستخدم — لأن sender_id NOT NULL لا يقبل null
+        // نحذف أولاً السجلات التابعة لتجنب أي foreign key violations
+        $transferIds = Transfer::where('sender_id', $id)->pluck('id');
+
+        if ($transferIds->isNotEmpty()) {
+            // حذف سجلات التاريخ المرتبطة
+            \App\Models\TransferHistory::whereIn('transfer_id', $transferIds)->delete();
+
+            // حذف الرسائل المرتبطة إن وُجدت
+            try {
+                \Illuminate\Support\Facades\DB::table('messages')
+                    ->whereIn('transfer_id', $transferIds)->delete();
+            } catch (\Exception $e) { /* الجدول قد لا يوجد */ }
+
+            // حذف الحوالات نفسها
+            Transfer::whereIn('id', $transferIds)->delete();
+        }
 
         return response()->json([
             'status'  => 'success',
-            'message' => 'تم تفريغ مرجع المستخدم من الحوالات',
+            'message' => 'تم حذف حوالات المستخدم بنجاح',
+            'deleted' => $transferIds->count(),
         ]);
     }
 }
