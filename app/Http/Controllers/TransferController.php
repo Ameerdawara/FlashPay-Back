@@ -495,6 +495,10 @@ class TransferController extends Controller
             $safe->update(['agent_profit_ratio' => $validated['agent_profit_ratio']]);
         }
 
+        // ✅ تحديث النسبة في جدول users أيضاً — لأن agentSafe يقرأها من $user->agent_profit_ratio
+        \App\Models\User::where('id', $validated['agent_id'])
+            ->update(['agent_profit_ratio' => $validated['agent_profit_ratio']]);
+
         return response()->json([
             'status'             => 'success',
             'message'            => 'تم تحديث نسبة ربح المندوب بنجاح',
