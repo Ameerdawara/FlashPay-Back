@@ -98,9 +98,9 @@ class MainSafeController extends Controller
 
         $safe = $user->mainSafe;
 
-        // جلب الحوالات المرتبطة بالوكيل (approved, waiting, ready)
-        $transfers = \App\Models\Transfer::where('agent_id', $user->id)
-            ->whereIn('status', ['approved', 'waiting', 'ready'])
+        // ✅ sender_id هو العمود الصحيح — لا يوجد agent_id في جدول transfers
+        $transfers = \App\Models\Transfer::where('sender_id', $user->id)
+            ->whereIn('status', ['approved', 'waiting', 'ready', 'completed'])
             ->latest()
             ->get()
             ->toArray();
