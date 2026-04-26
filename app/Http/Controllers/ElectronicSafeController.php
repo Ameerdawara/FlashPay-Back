@@ -11,6 +11,16 @@ use App\Models\OfficeSafe;
 
 class ElectronicSafeController extends Controller
 {
+
+
+public function getAllBalances(Request $request)
+{
+    if (Auth::user()->role !== 'super_admin') {
+        return response()->json(['message' => 'غير مصرح'], 403);
+    }
+    $safes = ElectronicSafe::all()->keyBy('office_id');
+    return response()->json(['status' => 'success', 'data' => $safes]);
+}
     /* ═══════════════════════════════════════════════════
        GET /electronic-safe/balances
        جلب أرصدة الخزنة الإلكترونية للمكتب الحالي
@@ -165,7 +175,7 @@ class ElectronicSafeController extends Controller
         // 3. التعديل الجديد: زيادة الخزنة الورقية للمكتب (سوري أو دولار)
         $isSyrian = ($currencyType === 'syp_sham_cash');
         $officeSafeField = $isSyrian ? 'balance_sy' : 'balance';
-        
+
         $officeSafe = OfficeSafe::where('office_id', $user->office_id)->lockForUpdate()->first();
         if (!$officeSafe) {
             return response()->json(['message' => 'خزنة المكتب غير موجودة'], 404);
