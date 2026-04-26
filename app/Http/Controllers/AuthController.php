@@ -42,7 +42,8 @@ class AuthController extends Controller
                 'nullable', 'string',
             ],
 
-            'balance'   => 'required_if:role,agent|numeric|min:0',
+            'balance'            => 'required_if:role,agent|numeric|min:0',
+            'agent_profit_ratio' => 'nullable|numeric|min:0|max:100',
             'office_id' => [
                 Rule::requiredIf(function () use ($request) {
                     return in_array($request->role, ['admin', 'accountant', 'cashier']);
@@ -92,8 +93,14 @@ class AuthController extends Controller
                 $user = User::create($data);
 
                 if ($user->role === 'agent') {
+                    // ✅ حفظ نسبة الربح صراحةً لتجاوز أي مشكلة في الـ fillable
+                    if (!empty($data['agent_profit_ratio'])) {
+                        $user->agent_profit_ratio = (float) $data['agent_profit_ratio'];
+                        $user->save();
+                    }
                     $user->mainSafe()->create([
-                        'balance' => $request->balance ?? 0,
+                        'balance'            => $request->balance ?? 0,
+                        'agent_profit_ratio' => (float) ($data['agent_profit_ratio'] ?? 0),
                     ]);
                 }
 
