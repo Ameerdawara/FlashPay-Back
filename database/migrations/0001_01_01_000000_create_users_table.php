@@ -23,6 +23,7 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
 
             // ✅ أعمدة ضرورية كانت ناقصة
+            $table->decimal('agent_profit_ratio', 5, 2)->default(0)->nullable();
 
             $table->rememberToken();
             $table->timestamps();

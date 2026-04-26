@@ -105,14 +105,21 @@ class MainSafeController extends Controller
             ->get()
             ->toArray();
 
+        // ✅ يقرأ agent_profit_ratio من MainSafe أولاً (المصدر الأصح)
+        // ثم من users كـ fallback — لأن العمود قد يكون null في users
+        $profitRatio = 0.0;
+        if ($safe && $safe->agent_profit_ratio > 0) {
+            $profitRatio = (float) $safe->agent_profit_ratio;
+        } elseif ($user->agent_profit_ratio > 0) {
+            $profitRatio = (float) $user->agent_profit_ratio;
+        }
+
         return response()->json([
             'status' => 'success',
             'data'   => [
                 'balance'            => $safe ? (float) $safe->balance : 0.0,
                 'agent_profit'       => $safe ? (float) ($safe->agent_profit ?? 0) : 0.0,
-                'agent_profit_ratio' => $user->agent_profit_ratio
-                    ? (float) $user->agent_profit_ratio
-                    : 0.0,
+                'agent_profit_ratio' => $profitRatio,
                 'transfers'          => $transfers,
             ],
         ]);
