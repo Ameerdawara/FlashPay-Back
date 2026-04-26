@@ -537,28 +537,15 @@ class TransferController extends Controller
             return response()->json(['message' => 'غير مصرح'], 403);
         }
 
-        // ✅ حذف الحوالات المرتبطة بالمستخدم — لأن sender_id NOT NULL لا يقبل null
-        // نحذف أولاً السجلات التابعة لتجنب أي foreign key violations
-        $transferIds = Transfer::where('sender_id', $id)->pluck('id');
-
-        if ($transferIds->isNotEmpty()) {
-            // حذف سجلات التاريخ المرتبطة
-            \App\Models\TransferHistory::whereIn('transfer_id', $transferIds)->delete();
-
-            // حذف الرسائل المرتبطة إن وُجدت
-            try {
-                \Illuminate\Support\Facades\DB::table('messages')
-                    ->whereIn('transfer_id', $transferIds)->delete();
-            } catch (\Exception $e) { /* الجدول قد لا يوجد */ }
-
-            // حذف الحوالات نفسها
-            Transfer::whereIn('id', $transferIds)->delete();
-        }
+        // ✅ تفريغ sender_id → null للحفاظ على السجل المالي
+        // (يعمل بعد migration يجعل sender_id nullable)
+        $count = Transfer::where('sender_id', $id)->count();
+        Transfer::where('sender_id', $id)->update(['sender_id' => null]);
 
         return response()->json([
-            'status'  => 'success',
-            'message' => 'تم حذف حوالات المستخدم بنجاح',
-            'deleted' => $transferIds->count(),
+            'status'   => 'success',
+            'message'  => 'تم تفريغ مرجع المستخدم من الحوالات مع الحفاظ على السجل المالي',
+            'affected' => $count,
         ]);
     }
 }
