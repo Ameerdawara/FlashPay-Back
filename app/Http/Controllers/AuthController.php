@@ -90,17 +90,27 @@ class AuthController extends Controller
                     unset($data['country_name']);
                 }
 
+                // ✅ إزالة agent_profit_ratio من data قبل create لأن العمود قد لا يكون موجوداً بعد
+                $agentProfitRatio = (float) ($data['agent_profit_ratio'] ?? 0);
+                unset($data['agent_profit_ratio']);
+
                 $user = User::create($data);
 
                 if ($user->role === 'agent') {
-                    // ✅ حفظ نسبة الربح صراحةً لتجاوز أي مشكلة في الـ fillable
-                    if (!empty($data['agent_profit_ratio'])) {
-                        $user->agent_profit_ratio = (float) $data['agent_profit_ratio'];
-                        $user->save();
+                    // ✅ تحديث النسبة بـ UPDATE منفصل لتجنب مشكلة العمود غير الموجود
+                    if ($agentProfitRatio > 0) {
+                        try {
+                            \Illuminate\Support\Facades\DB::table('users')
+                                ->where('id', $user->id)
+                                ->update(['agent_profit_ratio' => $agentProfitRatio]);
+                            $user->agent_profit_ratio = $agentProfitRatio;
+                        } catch (\Exception $e) {
+                            // العمود غير موجود بعد — نتجاهل ونحفظه في MainSafe فقط
+                        }
                     }
                     $user->mainSafe()->create([
                         'balance'            => $request->balance ?? 0,
-                        'agent_profit_ratio' => (float) ($data['agent_profit_ratio'] ?? 0),
+                        'agent_profit_ratio' => $agentProfitRatio,
                     ]);
                 }
 
