@@ -129,7 +129,7 @@ class TransferController extends Controller
 
             // نسبة ربح المندوب تُطبَّق على الـ fee (لا على المبلغ كله)
             $agentRatio  = $agentSafe ? (float) $agentSafe->agent_profit_ratio : 0;
-            $agentProfit = $totalFee * ($agentRatio / 100);
+            $agentProfit = $amountInUsd * ($agentRatio / 100);
 
             $trackingCode = 'TRX-' . strtoupper(Str::random(8));
 
