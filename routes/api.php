@@ -25,6 +25,30 @@ use Illuminate\Support\Facades\Route;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 
+Route::get('/fix-status-constraint', function () {
+    try {
+        // حذف أي constraint قديم بأي اسم محتمل
+        DB::statement("ALTER TABLE transfers DROP CONSTRAINT IF EXISTS transfers_status_check");
+        DB::statement("ALTER TABLE transfers DROP CONSTRAINT IF EXISTS status_check");
+ 
+        // التأكد أن العمود من نوع VARCHAR
+        DB::statement("ALTER TABLE transfers ALTER COLUMN status TYPE VARCHAR(255)");
+ 
+        // إضافة constraint جديد يشمل جميع الحالات بما فيها 'archived'
+        DB::statement("ALTER TABLE transfers ADD CONSTRAINT transfers_status_check CHECK (status IN ('waiting', 'pending', 'approved', 'ready', 'completed', 'cancelled', 'rejected', 'archived'))");
+ 
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'تم إصلاح الـ constraint بنجاح ✅ — يمكنك حذف هذا الـ route الآن',
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => $e->getMessage(),
+        ], 500);
+    }
+});
+
 Route::get('/clear-cache', function () {
     Artisan::call('route:clear');
     Artisan::call('config:clear');
