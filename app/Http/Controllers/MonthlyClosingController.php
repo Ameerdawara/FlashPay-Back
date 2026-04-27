@@ -229,10 +229,10 @@ class MonthlyClosingController extends Controller
         $query = \App\Models\Transfer::with(['sender', 'currency', 'sendCurrency', 'destinationOffice'])
             ->where('status', 'archived')
             ->orderBy('created_at', 'desc');
-
-        if (!empty($validated['month'])) {
-            $query->whereRaw("DATE_FORMAT(created_at, '%Y-%m') = ?", [$validated['month']]);
-        }
+if (!empty($validated['month'])) {
+    $query->whereYear('created_at', '=', substr($validated['month'], 0, 4))
+          ->whereMonth('created_at', '=', substr($validated['month'], 5, 2));
+}
 
         if (!empty($validated['office_id'])) {
             $query->where('destination_office_id', $validated['office_id']);
