@@ -88,6 +88,108 @@ class MainSafeController extends Controller
         }
     }
 
+    /**
+     * GET /agents/safes  (super_admin only)
+     * يُرجع صناديق جميع المندوبين مع أرباحهم ونسبهم
+     */
+    public function agentsSafes(Request $request)
+    {
+        try {
+            $agents = \App\Models\User::where('role', 'agent')
+                ->with(['mainSafe', 'city', 'country'])
+                ->get();
+
+            $result = $agents->map(function ($agent) {
+                $safe = $agent->mainSafe;
+
+                $profitRatio = 0.0;
+                if ($safe && $safe->agent_profit_ratio > 0) {
+                    $profitRatio = (float) $safe->agent_profit_ratio;
+                } elseif ($agent->agent_profit_ratio > 0) {
+                    $profitRatio = (float) $agent->agent_profit_ratio;
+                }
+
+                return [
+                    'agent_id'           => $agent->id,
+                    'agent_name'         => $agent->name,
+                    'agent_phone'        => $agent->phone,
+                    'city'               => $agent->city->name ?? '—',
+                    'country'            => $agent->country->name ?? '—',
+                    'balance'            => $safe ? (float) $safe->balance : 0.0,
+                    'agent_profit'       => $safe ? (float) ($safe->agent_profit ?? 0) : 0.0,
+                    'agent_profit_ratio' => $profitRatio,
+                    'safe_id'            => $safe?->id,
+                ];
+            });
+
+            return response()->json(['status' => 'success', 'data' => $result]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * POST /agents/{id}/withdraw-profit  (super_admin only)
+     * سحب أرباح مندوب معين من صندوقه
+     */
+    public function withdrawAgentProfit(Request $request, $agentId)
+    {
+        $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+        ]);
+
+        $agent = \App\Models\User::where('id', $agentId)->where('role', 'agent')->firstOrFail();
+        $safe  = $agent->mainSafe;
+
+        if (!$safe) {
+            return response()->json(['status' => 'error', 'message' => 'لا يوجد صندوق لهذا المندوب'], 404);
+        }
+
+        $amount = (float) $request->amount;
+
+        if ($safe->agent_profit < $amount) {
+            return response()->json(['status' => 'error', 'message' => 'الأرباح غير كافية للسحب'], 400);
+        }
+
+        $safe->decrement('agent_profit', $amount);
+
+        return response()->json([
+            'status'              => 'success',
+            'message'             => "تم سحب $amount من أرباح {$agent->name}",
+            'remaining_profit'    => (float) $safe->fresh()->agent_profit,
+        ]);
+    }
+
+    /**
+     * PUT /agents/{id}/profit-ratio  (super_admin only)
+     * تعديل نسبة ربح المندوب
+     */
+    public function updateAgentProfitRatio(Request $request, $agentId)
+    {
+        $request->validate([
+            'agent_profit_ratio' => 'required|numeric|min:0|max:100',
+        ]);
+
+        $agent = \App\Models\User::where('id', $agentId)->where('role', 'agent')->firstOrFail();
+        $safe  = $agent->mainSafe;
+
+        $ratio = (float) $request->agent_profit_ratio;
+
+        // تحديث في المستخدم
+        $agent->update(['agent_profit_ratio' => $ratio]);
+
+        // تحديث في MainSafe إن وجد
+        if ($safe) {
+            $safe->update(['agent_profit_ratio' => $ratio]);
+        }
+
+        return response()->json([
+            'status'             => 'success',
+            'message'            => "تم تحديث نسبة ربح {$agent->name} إلى {$ratio}%",
+            'agent_profit_ratio' => $ratio,
+        ]);
+    }
+
     public function agentSafe(Request $request)
     {
         $user = $request->user();
