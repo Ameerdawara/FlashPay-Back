@@ -45,16 +45,26 @@ return new class extends Migration
 
         // 3. تعديل حالة الحوالات لتشمل 'archived'
         // (ملاحظة: تأكد أن هذه هي كل الحالات الموجودة لديك في جدول الحوالات)
-       DB::statement("ALTER TABLE transfers ALTER COLUMN status TYPE VARCHAR(255)");
-    DB::statement("ALTER TABLE transfers ADD CONSTRAINT status_check CHECK (status IN ('waiting', 'pending', 'approved', 'ready', 'completed', 'cancelled', 'rejected', 'archived'))");
+
+        // أولاً: حذف الـ constraint القديم إن وجد (لتجنب التعارض)
+        DB::statement("ALTER TABLE transfers DROP CONSTRAINT IF EXISTS transfers_status_check");
+        DB::statement("ALTER TABLE transfers DROP CONSTRAINT IF EXISTS status_check");
+
+        // ثانياً: تحويل العمود إلى VARCHAR لدعم القيم الجديدة
+        DB::statement("ALTER TABLE transfers ALTER COLUMN status TYPE VARCHAR(255)");
+
+        // ثالثاً: إضافة constraint جديد يشمل 'archived'
+        DB::statement("ALTER TABLE transfers ADD CONSTRAINT transfers_status_check CHECK (status IN ('waiting', 'pending', 'approved', 'ready', 'completed', 'cancelled', 'rejected', 'archived'))");
     }
 
     public function down(): void
     {
         // إرجاع الحالة لما كانت عليه قبل التهجير
-        DB::statement("ALTER TABLE transfers MODIFY COLUMN status ENUM(
-            'waiting','pending','approved','ready','completed','cancelled','rejected'
-        ) NOT NULL DEFAULT 'waiting'");
+        DB::statement("ALTER TABLE transfers DROP CONSTRAINT IF EXISTS transfers_status_check");
+        DB::statement("ALTER TABLE transfers DROP CONSTRAINT IF EXISTS status_check");
+
+        DB::statement("ALTER TABLE transfers ALTER COLUMN status TYPE VARCHAR(255)");
+        DB::statement("ALTER TABLE transfers ADD CONSTRAINT transfers_status_check CHECK (status IN ('waiting', 'pending', 'approved', 'ready', 'completed', 'cancelled', 'rejected'))");
 
         Schema::dropIfExists('monthly_safe_snapshots');
         Schema::dropIfExists('monthly_closings');
