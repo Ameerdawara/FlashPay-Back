@@ -90,7 +90,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     Route::prefix('electronic-safe')->group(function () {
+
         Route::get('/balances', [ElectronicSafeController::class, 'getBalances']);
+        Route::get('/all-balances', [ElectronicSafeController::class, 'getAllBalances']);
+
         Route::post('/buy',     [ElectronicSafeController::class, 'buy']);
         Route::post('/sell',    [ElectronicSafeController::class, 'sell']);
         Route::get('/logs',     [ElectronicSafeController::class, 'logs']);
@@ -164,7 +167,6 @@ Route::middleware('auth:sanctum')->group(function () {
             return response()->json(['status' => 'success', 'data' => $user]);
         });
         Route::patch('/users/{id}/toggle-status', [AuthController::class, 'toggleStatus']);
-Route::get('/all-balances', [ElectronicSafeController::class, 'getAllBalances']);
         // أسعار الصرف
         Route::put('/currencies/update-price/{identifier}',      [CurrencyController::class, 'updatePrice']);
         Route::put('/currencies/update-main-price/{identifier}', [CurrencyController::class, 'updateMainPrice']);
