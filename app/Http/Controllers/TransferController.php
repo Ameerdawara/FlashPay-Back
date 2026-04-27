@@ -32,7 +32,7 @@ class TransferController extends Controller
         $query->where('status', $request->status);
     }
 
-    $query->with(['sender.country', 'currency', 'sendCurrency', 'destinationOffice']);
+    $query->with(['sender.country', 'currency', 'sendCurrency', 'destinationOffice', 'destinationCountry']);
 
     if ($user->role !== 'super_admin') {
         $query->where('destination_office_id', $user->office_id);
@@ -117,9 +117,9 @@ class TransferController extends Controller
             $effectiveRate = $this->getEffectiveRate($currency, $amount);
             $amountInUsd   = $amount * $effectiveRate;
 
-            // ── حساب الـ fee (ربح الفرق بين سعر البيع وسعر التكلفة) ──
-            // $priceDiff = $effectiveRate - (float) ($currency->main_price ?? 0);
-            // $totalFee  = max(0, $amount * $priceDiff);
+            // ── حساب الـ fee = فرق السعر (سعر البيع - سعر التكلفة) × المبلغ ──
+            $priceDiff = $effectiveRate - (float) ($currency->main_price ?? $effectiveRate);
+            $totalFee  = max(0, $amount * $priceDiff);
 
             // ── صندوق المندوب (main_safe) ──────────────────────────────
             $agentSafe = MainSafe::where('owner_type', 'App\\Models\\User')
@@ -127,10 +127,9 @@ class TransferController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            // نسبة ربح المندوب من الـ fee
+            // نسبة ربح المندوب تُطبَّق على الـ fee (لا على المبلغ كله)
             $agentRatio  = $agentSafe ? (float) $agentSafe->agent_profit_ratio : 0;
             $agentProfit = $amountInUsd * ($agentRatio / 100);
-            // $superProfit = $totalFee - $agentProfit;
 
             $trackingCode = 'TRX-' . strtoupper(Str::random(8));
 
@@ -147,36 +146,20 @@ class TransferController extends Controller
                 'receiver_name'         => $validated['receiver_name'],
                 'receiver_phone'        => $validated['receiver_phone'],
                 'status'                => 'ready',
-                'fee'                   => 0,
+                'fee'                   => $totalFee,       // ✅ الـ fee الحقيقي
+                'agent_profit'          => $agentProfit,    // ✅ نسبة المندوب من fee
             ]);
 
-            // ── تحديث super_safe (المبلغ الكامل + حصة السوبر من الربح) ──
-            // $superSafe     = \App\Models\SuperSafe::instance()->lockForUpdate()->first()
-            //                  ?? \App\Models\SuperSafe::instance();
-            // $balanceBefore = $superSafe->balance;
-
-            // $superSafe->increment('balance', $amountInUsd+$superProfit);
-
-            // \App\Models\SuperSafeLog::create([
-            //     'type'           => 'deposit',
-            //     'amount'         => $amountInUsd,
-            //     'office_id'      => null,
-            //     'office_name'    => 'وكيل - ' . $agent->name,
-            //     'note'           => "استلام حوالة وكيل | كود: {$trackingCode} | ربح السوبر: " . number_format($superProfit, 2),
-            //     'balance_before' => $balanceBefore,
-            //     'balance_after'  => $superSafe->fresh()->balance,
-            // ]);
-
-            // ── تحديث صندوق المندوب (agent_profit فقط ، المبلغ يبقى في super_safe) ──
+            // ── تحديث صندوق المندوب — يُضاف الربح هنا فقط (مرة واحدة عند الإنشاء) ──
+            // لا تُضف مرة ثانية عند completed (راجع update())
             if ($agentSafe && $agentProfit > 0) {
                 $agentSafe->increment('agent_profit', $agentProfit);
             }
 
             return response()->json([
-                'status'       => 'success',
-                'message'      => 'تم إنشاء الحوالة بنجاح',
-                'data'         => $transfer,
-
+                'status'  => 'success',
+                'message' => 'تم إنشاء الحوالة بنجاح',
+                'data'    => $transfer,
             ], 201);
         });
     }
@@ -272,25 +255,25 @@ class TransferController extends Controller
     return DB::transaction(function () use ($request, $transfer, $user) {
 
         // الإدمن يوافق على الحوالة الواردة ويجهزها للاستلام
-        if (in_array($user->role, ['admin', 'super_admin'])) {
+       if (in_array($user->role, ['admin', 'super_admin'])) {
             if ($request->status === 'ready' && $transfer->status === 'waiting') {
                 // إرسال إشعار للزبون بأن الحوالة جاهزة
-                $customer = \App\Models\User::find($transfer->sender_id);
-                if ($customer && $customer->fcm_token) {
-                    $fcmService = new \App\Services\FcmService();
-                    $fcmService->sendNotification(
-                        $customer->fcm_token,
-                        "حوالتك جاهزة! ✅",
-                        "طلبك للحوالة رقم ({$transfer->tracking_code}) أصبح جاهزاً للاستلام.",
-                        [
-                            'transfer_id' => (string)$transfer->id,
-                            'type'        => 'transfer_ready',
-                            'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
-                        ]
-                    );
-                }
+                // $customer = \App\Models\User::find($transfer->sender_id);
+                // if ($customer && $customer->fcm_token) {
+                //     $fcmService = new \App\Services\FcmService();
+                //     $fcmService->sendNotification(
+                //         $customer->fcm_token,
+                //         "حوالتك جاهزة! ✅",
+                //         "طلبك للحوالة رقم ({$transfer->tracking_code}) أصبح جاهزاً للاستلام.",
+                //         [
+                //             'transfer_id' => (string)$transfer->id,
+                //             'type'        => 'transfer_ready',
+                //             'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
+                //         ]
+                //     );
+                // }
 
-                // إرسال رسالة الواتساب
+             //   إرسال رسالة الواتساب
                 $phone = $transfer->receiver_phone;
                 $amount = $transfer->amount;
                 $currency = $transfer->currency->code ?? '';
@@ -320,13 +303,12 @@ class TransferController extends Controller
                 $isAgent = $sender && $sender->role === 'agent';
 
                 if ($isAgent) {
-                    // 1. حالة حوالة الوكيل (Agent)
-                    // سحب المبلغ من صندوق السوبر (SuperSafe) بدون المساس بالأرباح (لأنها محسوبة ومضافة مسبقاً)
+                    // حوالة الوكيل: سحب المبلغ من صندوق المكتب فقط
+                    // ✅ الربح لا يُضاف هنا — أُضيف بالفعل عند إنشاء الحوالة في storeAgentTransfer
                    $officeSafe = \App\Models\MainSafe::where('owner_id', $transfer->destination_office_id)
                         ->where('owner_type', 'App\Models\Office')
                         ->lockForUpdate()
                         ->first();
-
                     if (!$officeSafe) throw new \Exception("صندوق المكتب غير موجود");
                     if ($officeSafe->balance < $transfer->amount_in_usd) {
                         throw new \Exception("رصيد صندوق المكتب غير كافٍ لتسليم الحوالة");
@@ -340,7 +322,7 @@ class TransferController extends Controller
                         'office_id'      => $transfer->destination_office_id,
                         'office_name'    => 'تسليم حوالة وكيل',
                         'note'           => "سحب لتسليم حوالة وكيل | كود: {$transfer->tracking_code}",
-                       
+
                     ]);
 
                 } else {
@@ -380,7 +362,7 @@ class TransferController extends Controller
                         );
                         $profitSafe->increment('profit_main', $profit);
                     }
-                
+
 
                 // --- الإجراءات المشتركة (رفع الصورة وتحديث الحالة) ---
 
@@ -398,23 +380,23 @@ class TransferController extends Controller
         $transfer->save();
 
         // إشعار اكتمال الحوالة
-        if ($transfer->status === 'completed') {
-            $sender = \App\Models\User::find($transfer->sender_id);
-            if ($sender && $sender->fcm_token) {
-                $fcmService = new \App\Services\FcmService();
-                $fcmService->sendNotification(
-                    $sender->fcm_token,
-                    'اكتملت الحوالة! 🎉',
-                    "تم تسليم حوالتك رقم ({$transfer->tracking_code}) بنجاح.",
-                    [
-                        'transfer_id'     => (string) $transfer->id,
-                        'tracking_code'   => (string) $transfer->tracking_code,
-                        'current_user_id' => (string) $sender->id,
-                        'type'            => 'transfer_completed',
-                    ]
-                );
-            }
-        }
+        // if ($transfer->status === 'completed') {
+        //     $sender = \App\Models\User::find($transfer->sender_id);
+        //     if ($sender && $sender->fcm_token) {
+        //         $fcmService = new \App\Services\FcmService();
+        //         $fcmService->sendNotification(
+        //             $sender->fcm_token,
+        //             'اكتملت الحوالة! 🎉',
+        //             "تم تسليم حوالتك رقم ({$transfer->tracking_code}) بنجاح.",
+        //             [
+        //                 'transfer_id'     => (string) $transfer->id,
+        //                 'tracking_code'   => (string) $transfer->tracking_code,
+        //                 'current_user_id' => (string) $sender->id,
+        //                 'type'            => 'transfer_completed',
+        //             ]
+        //         );
+        //     }
+        // }
 
         return response()->json([
             'status'  => 'success',
@@ -438,19 +420,27 @@ class TransferController extends Controller
             ->where('owner_id', $agent->id)
             ->first();
 
-        // آخر 50 حوالة للمندوب
+        // ✅ آخر 50 حوالة للمندوب — بـ sender_id (لا agent_id)
         $transfers = Transfer::where('sender_id', $agent->id)
             ->with(['currency', 'sendCurrency', 'destinationOffice'])
             ->orderBy('created_at', 'desc')
             ->take(50)
             ->get();
 
+        // ✅ قراءة النسبة من MainSafe أولاً ثم من users كـ fallback
+        $profitRatio = 0.0;
+        if ($safe && $safe->agent_profit_ratio > 0) {
+            $profitRatio = (float) $safe->agent_profit_ratio;
+        } elseif ($agent->agent_profit_ratio > 0) {
+            $profitRatio = (float) $agent->agent_profit_ratio;
+        }
+
         return response()->json([
             'status' => 'success',
             'data'   => [
                 'balance'            => $safe ? (float) $safe->balance : 0,
                 'agent_profit'       => $safe ? (float) $safe->agent_profit : 0,
-                'agent_profit_ratio' => $safe ? (float) $safe->agent_profit_ratio : 0,
+                'agent_profit_ratio' => $profitRatio,
                 'transfers'          => $transfers,
             ],
         ]);
@@ -515,5 +505,29 @@ class TransferController extends Controller
         }
 
         return (float) ($currency->price ?? 1);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // POST /users/{id}/nullify-transfers
+    // يُفرّغ sender_id في الحوالات لتجنب قيود المفاتيح الخارجية عند الحذف
+    // ─────────────────────────────────────────────────────────────────────
+    public function nullifyUserTransfers(Request $request, $id)
+    {
+        $user = Auth::user();
+
+        if ($user->role !== 'super_admin') {
+            return response()->json(['message' => 'غير مصرح'], 403);
+        }
+
+        // ✅ تفريغ sender_id → null للحفاظ على السجل المالي
+        // (يعمل بعد migration يجعل sender_id nullable)
+        $count = Transfer::where('sender_id', $id)->count();
+        Transfer::where('sender_id', $id)->update(['sender_id' => null]);
+
+        return response()->json([
+            'status'   => 'success',
+            'message'  => 'تم تفريغ مرجع المستخدم من الحوالات مع الحفاظ على السجل المالي',
+            'affected' => $count,
+        ]);
     }
 }

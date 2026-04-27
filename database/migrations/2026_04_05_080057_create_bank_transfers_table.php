@@ -11,41 +11,45 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
+{public function up(): void
 {
-    public function up(): void
-    {
-        Schema::create('bank_transfer', function (Blueprint $table) {
-            $table->id();
+    Schema::create('bank_transfer', function (Blueprint $table) {
+        $table->id();
 
-            // الوكيل الذي أرسل الطلب
-            $table->foreignId('agent_id')
-                  ->constrained('users')
-                  ->onDelete('cascade');
+        $table->foreignId('agent_id')
+              ->constrained('users')
+              ->onDelete('cascade');
 
-            // بيانات البنك
-            $table->string('bank_name');
-            $table->string('account_number');
-            $table->string('full_name');
-            $table->string('phone', 30);
+        $table->string('bank_name');
+        $table->string('account_number');
+        $table->string('full_name');
+  $table->string('destination_country')->nullable(); // الدولة الوجهة
+        $table->string('destination_city')->nullable();    // المدينة الوجهة
+ 
+        // 👇 هذا هو السطر الذي نسيته يجب إضافته هنا 👇
+        $table->string('recipient_name');
 
-            // المبلغ بالدولار — يذهب إلى super_safe مباشرة عند الموافقة
-            $table->decimal('amount', 15, 2);
+        $table->string('phone', 30);
+        $table->decimal('amount', 15, 2);
+        $table->text('notes')->nullable();
 
-            // ملاحظات اختيارية
-            $table->text('notes')->nullable();
+        $table->enum('status', ['pending', 'approved', 'admin_approved', 'completed', 'rejected'])
+              ->default('pending');
 
-            // الحالة: pending → approved | rejected
-            $table->enum('status', ['pending', 'approved', 'rejected'])
-                  ->default('pending');
+        $table->foreignId('approved_by')
+              ->nullable()
+              ->constrained('users')
+              ->onDelete('set null');
 
-            // السوبر ادمن الذي وافق/رفض
-            $table->foreignId('approved_by')
-                  ->nullable()
-                  ->constrained('users')
-                  ->onDelete('set null');
+        // أضفت لك عمود الكاشير أيضاً لأنه موجود في الـ Model والـ Controller ولكنه ناقص هنا
+        $table->foreignId('cashier_id')
+              ->nullable()
+              ->constrained('users')
+              ->onDelete('set null');
 
-            $table->timestamps();
-        });
+        $table->timestamps();
+    });
+
     }
 
     public function down(): void

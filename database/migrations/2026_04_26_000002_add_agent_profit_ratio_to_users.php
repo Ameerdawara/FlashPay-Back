@@ -6,27 +6,21 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        // نتحقق أولاً: إذا كان العمود غير موجود، قم بإضافته
-        if (!Schema::hasColumn('users', 'fcm_token')) {
+        // فحص منفصل خارج الـ closure — هذا هو الصحيح في PostgreSQL
+        if (!Schema::hasColumn('users', 'agent_profit_ratio')) {
             Schema::table('users', function (Blueprint $table) {
-                $table->string('fcm_token')->nullable()->after('password');
+                $table->decimal('agent_profit_ratio', 5, 2)->default(0)->nullable();
             });
         }
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        if (Schema::hasColumn('users', 'fcm_token')) {
+        if (Schema::hasColumn('users', 'agent_profit_ratio')) {
             Schema::table('users', function (Blueprint $table) {
-                $table->dropColumn('fcm_token');
+                $table->dropColumn('agent_profit_ratio');
             });
         }
     }
