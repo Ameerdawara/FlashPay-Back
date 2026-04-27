@@ -148,6 +148,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/super-safe/transfer-to-office',   [\App\Http\Controllers\SuperSafeController::class, 'transferToOffice']);
         Route::post('/super-safe/transfer-from-office', [\App\Http\Controllers\SuperSafeController::class, 'transferFromOffice']);
 
+        // صناديق المندوبين (super_admin فقط)
+        Route::get('/agents/safes',                       [MainSafeController::class, 'agentsSafes']);
+        Route::post('/agents/{id}/withdraw-profit',       [MainSafeController::class, 'withdrawAgentProfit']);
+        Route::put('/agents/{id}/profit-ratio',           [MainSafeController::class, 'updateAgentProfitRatio']);
+
         // إدارة المستخدمين
         Route::put('/users/{id}', function (Request $request, $id) {
             $user = User::findOrFail($id);
