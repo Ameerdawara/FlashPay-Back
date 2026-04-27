@@ -137,10 +137,7 @@ class ExtraBoxController extends Controller
             return DB::transaction(function () use ($request, $id) {
                 $box = ExtraBox::where('id', $id)->lockForUpdate()->firstOrFail();
 
-                if ($box->amount < (float)$request->amount) {
-                    throw new \Exception('الرصيد غير كافٍ في الصندوق');
-                }
-
+                // السحب مسموح حتى لو النتيجة سالبة (مديونية)
                 $box->decrement('amount', (float)$request->amount);
 
                 $newBalance = $box->fresh()->amount;
