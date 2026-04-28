@@ -21,7 +21,10 @@ class User extends Authenticatable
         'country_id',
         'city_id',
         'is_active',
-        'id_card_image',
+        // ✅ الثلاث صور المنفصلة بدل id_card_image الواحدة
+        'selfie_with_id',
+        'id_card_front',
+        'id_card_back',
         'fcm_token',
         'agent_profit_ratio',
     ];

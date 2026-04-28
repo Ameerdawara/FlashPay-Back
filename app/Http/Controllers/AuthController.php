@@ -16,17 +16,18 @@ class AuthController extends Controller
         $validated = $request->validate([
             'name'     => 'required|string|max:255',
             'email'    => 'required|string|email|max:255|unique:users',
-            'phone'    => 'required|string|unique:users',
+            'phone'    => 'required|string|max:30|unique:users',   // ✅ max:30 لأرقام دولية
             'password' => 'required|string|min:8',
             'role'     => ['required', Rule::in(['super_admin', 'admin', 'accountant', 'cashier', 'agent', 'customer'])],
 
-            'id_card_image' => 'required_if:role,customer|image|mimes:jpeg,png,jpg|max:2048',
+            // ✅ ثلاث صور منفصلة للـ customer (كل منها اختيارية منفردة لكن يُتحقق منها في الكود)
+            'selfie_with_id' => 'required_if:role,customer|image|mimes:jpeg,png,jpg|max:4096',
+            'id_card_front'  => 'required_if:role,customer|image|mimes:jpeg,png,jpg|max:4096',
+            'id_card_back'   => 'required_if:role,customer|image|mimes:jpeg,png,jpg|max:4096',
 
-            // ✅ الإصلاح: country_id/city_id اختيارية تماماً لأن الـ customer يرسل الأسماء
             'country_id'   => ['nullable', 'exists:countries,id'],
             'city_id'      => ['nullable', 'exists:cities,id'],
 
-            // ✅ الإصلاح: نتحقق أن أحد الخيارين (ID أو Name) موجود للـ customer/agent
             'country_name' => [
                 Rule::requiredIf(function () use ($request) {
                     return in_array($request->role, ['agent', 'customer'])
@@ -51,7 +52,7 @@ class AuthController extends Controller
                 'exists:offices,id',
                 'nullable'
             ],
-            'fcm_token' => 'nullable|string', // ✅ أضف هذا السطر
+            'fcm_token' => 'nullable|string',
         ]);
 
         try {
@@ -59,18 +60,27 @@ class AuthController extends Controller
                 $data = $validated;
                 $data['password'] = Hash::make($request->password);
 
-                // ✅ رفع صورة الهوية
-                unset($data['id_card_image']);
-                if ($request->hasFile('id_card_image')) {
-                    $data['id_card_image'] = $request->file('id_card_image')
-                        ->store('id_cards', 'public');
+                // ✅ رفع الصور الثلاث منفصلة
+                unset($data['selfie_with_id'], $data['id_card_front'], $data['id_card_back']);
+
+                if ($request->hasFile('selfie_with_id')) {
+                    $data['selfie_with_id'] = $request->file('selfie_with_id')
+                        ->store('id_cards/selfies', 'public');
+                }
+                if ($request->hasFile('id_card_front')) {
+                    $data['id_card_front'] = $request->file('id_card_front')
+                        ->store('id_cards/fronts', 'public');
+                }
+                if ($request->hasFile('id_card_back')) {
+                    $data['id_card_back'] = $request->file('id_card_back')
+                        ->store('id_cards/backs', 'public');
                 }
 
                 if ($request->role === 'agent') {
                     $data['office_id'] = null;
                 }
 
-                // ✅ تحويل city_name → city_id
+                // تحويل city_name → city_id
                 if (!empty($data['city_name'])) {
                     $city = \App\Models\City::where('name', $data['city_name'])->first();
                     if (!$city) {
@@ -80,7 +90,7 @@ class AuthController extends Controller
                     unset($data['city_name']);
                 }
 
-                // ✅ تحويل country_name → country_id
+                // تحويل country_name → country_id
                 if (!empty($data['country_name'])) {
                     $country = \App\Models\Country::where('name', $data['country_name'])->first();
                     if (!$country) {
@@ -90,14 +100,12 @@ class AuthController extends Controller
                     unset($data['country_name']);
                 }
 
-                // ✅ إزالة agent_profit_ratio من data قبل create لأن العمود قد لا يكون موجوداً بعد
                 $agentProfitRatio = (float) ($data['agent_profit_ratio'] ?? 0);
                 unset($data['agent_profit_ratio']);
 
                 $user = User::create($data);
 
                 if ($user->role === 'agent') {
-                    // ✅ تحديث النسبة بـ UPDATE منفصل لتجنب مشكلة العمود غير الموجود
                     if ($agentProfitRatio > 0) {
                         try {
                             \Illuminate\Support\Facades\DB::table('users')
@@ -105,7 +113,7 @@ class AuthController extends Controller
                                 ->update(['agent_profit_ratio' => $agentProfitRatio]);
                             $user->agent_profit_ratio = $agentProfitRatio;
                         } catch (\Exception $e) {
-                            // العمود غير موجود بعد — نتجاهل ونحفظه في MainSafe فقط
+                            // العمود غير موجود بعد — نتجاهل
                         }
                     }
                     $user->mainSafe()->create([
@@ -138,9 +146,9 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email'    => 'required|email',
-            'password' => 'required',
-            'fcm_token' => 'nullable|string', // ✅ أضف هذا السطر
+            'email'     => 'required|email',
+            'password'  => 'required',
+            'fcm_token' => 'nullable|string',
         ]);
 
         if (!Auth::attempt(['email' => $request->email, 'password' => $request->password, 'is_active' => 1])) {
@@ -159,12 +167,13 @@ class AuthController extends Controller
         }
 
         /** @var \App\Models\User $user */
-        $user  = Auth::user();
-        // ✅ تحديث التوكن إذا تم إرساله مع طلب تسجيل الدخول
-    if ($request->has('fcm_token') && !empty($request->fcm_token)) {
-        $user->fcm_token = $request->fcm_token;
-        $user->save();
-    }
+        $user = Auth::user();
+
+        if ($request->has('fcm_token') && !empty($request->fcm_token)) {
+            $user->fcm_token = $request->fcm_token;
+            $user->save();
+        }
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
@@ -219,6 +228,7 @@ class AuthController extends Controller
         $status = $user->is_active ? 'تفعيل' : 'حظر';
         return response()->json(['message' => "تم $status المستخدم بنجاح"]);
     }
+
     public function updateFcmToken(Request $request)
     {
         $request->validate([
@@ -230,7 +240,7 @@ class AuthController extends Controller
         $user->save();
 
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'تم تحديث الـ FCM Token بنجاح'
         ]);
     }
