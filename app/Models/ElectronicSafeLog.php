@@ -18,10 +18,17 @@ class ElectronicSafeLog extends Model
         'net_amount',
         'profit',
         'note',
+        'performed_by',   // ← المنفذ (user_id)
     ];
 
     public function office()
     {
         return $this->belongsTo(Office::class);
+    }
+
+    /** المستخدم المنفذ للعملية */
+    public function performer()
+    {
+        return $this->belongsTo(User::class, 'performed_by');
     }
 }
