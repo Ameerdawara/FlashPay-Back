@@ -29,11 +29,7 @@ return new class extends Migration
         // 👇 هذا هو السطر الذي نسيته يجب إضافته هنا 👇
         $table->string('recipient_name');
 
-        $table->foreignId('currency_id')
-              ->nullable()
-              ->constrained('currencies')
-              ->onDelete('set null');
-
+        
         $table->string('phone', 30);
         $table->decimal('amount', 15, 2);
         $table->text('notes')->nullable();
