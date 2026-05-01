@@ -13,7 +13,7 @@ class BankTransferController extends Controller
     {
         $user = Auth::user();
 
-        $query = BankTransfer::with(['agent:id,name,phone', 'approvedBy:id,name', 'cashier:id,name', 'currency:id,name,symbol'])
+        $query = BankTransfer::with(['agent:id,name,phone', 'approvedBy:id,name', 'cashier:id,name', 'currency:id,name,code'])
                               ->orderBy('created_at', 'desc');
 
         if ($user->role === 'agent') {
@@ -71,7 +71,7 @@ class BankTransferController extends Controller
         return response()->json([
             'status'  => 'success',
             'message' => 'تم إرسال طلب التحويل البنكي بنجاح وهو بانتظار موافقة الإدارة',
-            'data'    => $transfer->load('agent:id,name', 'currency:id,name,symbol'),
+            'data'    => $transfer->load('agent:id,name', 'currency:id,name,code'),
         ], 201);
     }
 
@@ -180,7 +180,7 @@ class BankTransferController extends Controller
     public function show($id)
     {
         $user = Auth::user();
-        $transfer = BankTransfer::with(['agent:id,name,phone', 'approvedBy:id,name', 'cashier:id,name', 'currency:id,name,symbol'])->findOrFail($id);
+        $transfer = BankTransfer::with(['agent:id,name,phone', 'approvedBy:id,name', 'cashier:id,name', 'currency:id,name,code'])->findOrFail($id);
 
         return response()->json(['status' => 'success', 'data' => $transfer]);
     }
