@@ -23,6 +23,7 @@ protected $table = 'bank_transfer';
         'destination_country', // الدولة الوجهة
         'destination_city',       // رقم الموبايل
         'amount',          // المبلغ (USD)
+        'currency_id',     // العملة المختارة
         'notes',           // ملاحظات اختيارية
         'status',          // pending | admin_approved | rejected | completed
         'approved_by',     // super_admin / admin ID الذي وافق
@@ -51,5 +52,11 @@ protected $table = 'bank_transfer';
     public function cashier()
     {
         return $this->belongsTo(User::class, 'cashier_id');
+    }
+
+    /** العملة المختارة */
+    public function currency()
+    {
+        return $this->belongsTo(\App\Models\Currency::class, 'currency_id');
     }
 }
