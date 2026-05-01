@@ -68,7 +68,10 @@ Route::get('/run-migrate', function () {
         ], 500);
     }
 });
-
+Route::get('/truncate-bank-transfer', function () {
+    \App\Models\BankTransfer::truncate();
+    return 'تم حذف بيانات جدول bank_transfer بنجاح';
+});
 /*
 |--------------------------------------------------------------------------
 | Public Routes
