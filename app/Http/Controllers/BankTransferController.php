@@ -13,7 +13,7 @@ class BankTransferController extends Controller
     {
         $user = Auth::user();
 
-        $query = BankTransfer::with(['agent:id,name,phone', 'approvedBy:id,name', 'cashier:id,name'])
+        $query = BankTransfer::with(['agent:id,name,phone', 'approvedBy:id,name', 'cashier:id,name', 'currency:id,name,symbol'])
                               ->orderBy('created_at', 'desc');
 
         if ($user->role === 'agent') {
@@ -50,6 +50,7 @@ class BankTransferController extends Controller
             'notes'          => 'nullable|string|max:1000',
             'destination_country' => 'nullable|string|max:100',
             'destination_city'    => 'nullable|string|max:100',
+            'currency_id'         => 'nullable|exists:currencies,id',
         ]);
 
         $transfer = BankTransfer::create([
@@ -63,13 +64,14 @@ class BankTransferController extends Controller
             'notes'          => $validated['notes'] ?? null,
             'destination_country' => $validated['destination_country'] ?? null,
             'destination_city'    => $validated['destination_city'] ?? null,
+            'currency_id'         => $validated['currency_id'] ?? null,
             'status'         => 'pending',
         ]);
 
         return response()->json([
             'status'  => 'success',
             'message' => 'تم إرسال طلب التحويل البنكي بنجاح وهو بانتظار موافقة الإدارة',
-            'data'    => $transfer->load('agent:id,name'),
+            'data'    => $transfer->load('agent:id,name', 'currency:id,name,symbol'),
         ], 201);
     }
 
@@ -178,7 +180,7 @@ class BankTransferController extends Controller
     public function show($id)
     {
         $user = Auth::user();
-        $transfer = BankTransfer::with(['agent:id,name,phone', 'approvedBy:id,name', 'cashier:id,name'])->findOrFail($id);
+        $transfer = BankTransfer::with(['agent:id,name,phone', 'approvedBy:id,name', 'cashier:id,name', 'currency:id,name,symbol'])->findOrFail($id);
 
         return response()->json(['status' => 'success', 'data' => $transfer]);
     }
