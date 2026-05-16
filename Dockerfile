@@ -40,4 +40,4 @@ RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf
 # فتح المنفذ 80 للإنترنت
 EXPOSE 80
 # تشغيل الـ Migrations ثم تشغيل سيرفر Apache تلقائياً
-CMD php artisan migrate --force && apache2-foreground
+ENTRYPOINT ["sh", "-c", "php artisan migrate --force && php artisan storage:link && apache2-foreground"]

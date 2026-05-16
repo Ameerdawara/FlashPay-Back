@@ -36,6 +36,7 @@ class ProfitSafeController extends Controller
             'amount'    => 'required|numeric|min:0.01',
             'type'      => 'required|in:deposit,withdraw',
             'currency'  => 'required|in:usd,sy',
+            'notes'     => 'nullable|string|max:500',
         ]);
 
         $user = Auth::user();
@@ -78,7 +79,8 @@ class ProfitSafeController extends Controller
                 'currency'         => strtoupper($currency === 'sy' ? 'SYP' : 'USD'),
                 'amount'           => $amount,
                 'description'      => ($isDeposit ? 'إيداع يدوي' : 'سحب يدوي') . ' في صندوق الأرباح ('
-                                    . ($currency === 'usd' ? 'دولار - profit_main' : 'ليرة سورية - profit_trade') . ')',
+                                    . ($currency === 'usd' ? 'دولار - profit_main' : 'ليرة سورية - profit_trade') . ')'
+                                    . (!empty($validated['notes']) ? " — {$validated['notes']}" : ''),
                 'performed_by'     => $user->id,
                 'balance_after'    => $fresh->profit_main,
                 'balance_sy_after' => $fresh->profit_trade,
@@ -104,6 +106,7 @@ class ProfitSafeController extends Controller
             'office_id' => 'required|exists:offices,id',
             'amount'    => 'required|numeric|min:0.01',
             'source'    => 'required|in:trade,main',
+            'notes'     => 'nullable|string|max:500',
         ]);
 
         $user = Auth::user();
@@ -141,7 +144,7 @@ class ProfitSafeController extends Controller
                 'action_type'      => 'transfer_to_office',
                 'currency'         => $logCurrency,
                 'amount'           => $amount,
-                'description'      => $desc,
+                'description'      => $desc . (!empty($validated['notes']) ? " — {$validated['notes']}" : ''),
                 'performed_by'     => $user->id ?? null,
                 'balance_after'    => $freshProfit->profit_main,
                 'balance_sy_after' => $freshProfit->profit_trade,

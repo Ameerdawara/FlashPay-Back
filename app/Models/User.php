@@ -2,14 +2,15 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
-{   use HasApiTokens, HasFactory, Notifiable;
+{
+    use HasApiTokens, HasFactory, Notifiable;
+
     protected $fillable = [
         'name',
         'email',
@@ -20,62 +21,52 @@ class User extends Authenticatable
         'country_id',
         'city_id',
         'is_active',
-        'id_card_image'
+        'id_card_image',
+        'fcm_token',
+        'agent_profit_ratio',
     ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at'  => 'datetime',
+            'password'           => 'hashed',
+            'is_active'          => 'boolean',
+            'agent_profit_ratio' => 'float',
+        ];
+    }
+
+    // ── العلاقات ──────────────────────────────────────────────────────────
+
     public function office()
     {
         return $this->belongsTo(Office::class);
     }
 
     public function country()
-    { 
+    {
         return $this->belongsTo(Country::class);
     }
+
     public function city()
-    { // للمناديب فقط
+    {
         return $this->belongsTo(City::class);
     }
 
-    // إذا كان المندوب له صندوق (Polymorphic)
+    /** صندوق المندوب (Polymorphic) */
     public function mainSafe()
     {
         return $this->morphOne(MainSafe::class, 'owner');
     }
 
-    // الحوالات التي أرسلها الزبون
+    /** الحوالات التي أرسلها المستخدم */
     public function sentTransfers()
     {
         return $this->hasMany(Transfer::class, 'sender_id');
-    }
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
-
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
-
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'is_active' => 'boolean',
-        ];
     }
 }

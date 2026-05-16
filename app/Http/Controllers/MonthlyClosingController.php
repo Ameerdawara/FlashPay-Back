@@ -134,9 +134,9 @@ class MonthlyClosingController extends Controller
             // ── 1. أرشفة الحوالات المكتملة للشهر المحدد ──────────────────
           // ── 1. جلب الحوالات المكتملة للشهر المحدد وحساب المجاميع ──────────────────
             $transfersQuery = DB::table('transfers')
-                ->where('status', 'completed')
-                ->whereRaw("DATE_FORMAT(created_at, '%Y-%m') = ?", [$month]);
-
+    ->where('status', 'completed')
+    ->whereYear('created_at', '=', substr($month, 0, 4))
+    ->whereMonth('created_at', '=', substr($month, 5, 2));
             if ($officeId) {
                 $transfersQuery->where('destination_office_id', $officeId);
             }
@@ -229,10 +229,10 @@ class MonthlyClosingController extends Controller
         $query = \App\Models\Transfer::with(['sender', 'currency', 'sendCurrency', 'destinationOffice'])
             ->where('status', 'archived')
             ->orderBy('created_at', 'desc');
-
-        if (!empty($validated['month'])) {
-            $query->whereRaw("DATE_FORMAT(created_at, '%Y-%m') = ?", [$validated['month']]);
-        }
+if (!empty($validated['month'])) {
+    $query->whereYear('created_at', '=', substr($validated['month'], 0, 4))
+          ->whereMonth('created_at', '=', substr($validated['month'], 5, 2));
+}
 
         if (!empty($validated['office_id'])) {
             $query->where('destination_office_id', $validated['office_id']);

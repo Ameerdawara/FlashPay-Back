@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\DB;
 
 class SafeActionController extends Controller
 {
-    // تابع التعديل اليدوي (فقط للخزنة المكتبية)
     public function adjust(Request $request)
     {
         $request->validate([
@@ -33,13 +32,13 @@ class SafeActionController extends Controller
         return response()->json(['status' => 'success', 'new_balance' => $safe->balance]);
     }
 
-    // تحويل من خزنة المكتب → صندوق رئيسي أو تداول
     public function transfer(Request $request)
     {
         $request->validate([
             'office_id' => 'required',
             'to_type'   => 'required|in:office_main,trading',
             'amount'    => 'required|numeric|min:0.01',
+            'notes'     => 'nullable|string|max:500',
         ]);
 
         try {
@@ -62,6 +61,24 @@ class SafeActionController extends Controller
                 $fromSafe->decrement('balance', $request->amount);
                 $toSafe->increment('balance', $request->amount);
 
+                try {
+                    DB::table('safe_action_logs')->insert([
+                        'office_id'        => $request->office_id,
+                        'safe_type'        => 'office_safe',
+                        'action_type'      => 'transfer',
+                        'currency'         => 'USD',
+                        'amount'           => $request->amount,
+                        'description'      => 'تحويل من خزنة المكتب إلى '
+                                           . ($request->to_type === 'office_main' ? 'الصندوق الرئيسي' : 'صندوق التداول')
+                                           . ($request->notes ? " — {$request->notes}" : ''),
+                        'performed_by'     => $request->user()?->id,  // ✅ الإصلاح
+                        'balance_after'    => $fromSafe->fresh()->balance,
+                        'balance_sy_after' => 0,
+                        'created_at'       => now(),
+                        'updated_at'       => now(),
+                    ]);
+                } catch (\Exception $e) { /* جدول غير موجود بعد */ }
+
                 return response()->json(['status' => 'success', 'message' => 'تم التحويل بنجاح']);
             });
         } catch (\Exception $e) {
@@ -69,18 +86,17 @@ class SafeActionController extends Controller
         }
     }
 
-    // تحويل من صندوق رئيسي أو تداول → خزنة المكتب (العكس)
     public function transferToOfficeSafe(Request $request)
     {
         $request->validate([
             'office_id' => 'required',
             'from_type' => 'required|in:office_main,trading',
             'amount'    => 'required|numeric|min:0.01',
+            'notes'     => 'nullable|string|max:500',
         ]);
 
         try {
             return DB::transaction(function () use ($request) {
-                // الصندوق المصدر
                 if ($request->from_type === 'office_main') {
                     $fromSafe = MainSafe::where('owner_id', $request->office_id)
                         ->where('owner_type', 'App\\Models\\Office')
@@ -94,12 +110,30 @@ class SafeActionController extends Controller
                     throw new \Exception('الرصيد غير كافٍ في الصندوق المصدر');
                 }
 
-                // الصندوق الهدف: خزنة المكتب
                 $toSafe = OfficeSafe::where('office_id', $request->office_id)
                     ->lockForUpdate()->firstOrFail();
 
                 $fromSafe->decrement('balance', $request->amount);
                 $toSafe->increment('balance', $request->amount);
+
+                try {
+                    DB::table('safe_action_logs')->insert([
+                        'office_id'        => $request->office_id,
+                        'safe_type'        => $request->from_type,
+                        'action_type'      => 'transfer_to_office',
+                        'currency'         => 'USD',
+                        'amount'           => $request->amount,
+                        'description'      => 'تحويل من '
+                                           . ($request->from_type === 'office_main' ? 'الصندوق الرئيسي' : 'صندوق التداول')
+                                           . ' إلى خزنة المكتب'
+                                           . ($request->notes ? " — {$request->notes}" : ''),
+                        'performed_by'     => $request->user()?->id,  // ✅ الإصلاح
+                        'balance_after'    => $toSafe->fresh()->balance,
+                        'balance_sy_after' => 0,
+                        'created_at'       => now(),
+                        'updated_at'       => now(),
+                    ]);
+                } catch (\Exception $e) { /* جدول غير موجود بعد */ }
 
                 return response()->json([
                     'status'  => 'success',

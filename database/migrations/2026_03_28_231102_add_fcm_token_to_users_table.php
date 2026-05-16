@@ -9,17 +9,25 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-   public function up()
-{
-    Schema::table('users', function (Blueprint $table) {
-        $table->string('fcm_token')->nullable()->after('password');
-    });
-}
+    public function up(): void
+    {
+        // نتحقق أولاً: إذا كان العمود غير موجود، قم بإضافته
+        if (!Schema::hasColumn('users', 'fcm_token')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->string('fcm_token')->nullable()->after('password');
+            });
+        }
+    }
 
-public function down()
-{
-    Schema::table('users', function (Blueprint $table) {
-        $table->dropColumn('fcm_token');
-    });
-}
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        if (Schema::hasColumn('users', 'fcm_token')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropColumn('fcm_token');
+            });
+        }
+    }
 };
