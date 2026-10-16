@@ -6,7 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class CurrencyRate extends Model
 {
-    protected $fillable = ['currency_id', 'min_amount', 'max_amount', 'rate'];
+    // type: 'usd' (افتراضي) أو 'syp'
+    protected $fillable = ['currency_id', 'type', 'min_amount', 'max_amount', 'rate'];
 
     public function currency()
     {
