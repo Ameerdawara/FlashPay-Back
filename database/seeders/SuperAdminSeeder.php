@@ -14,10 +14,10 @@ class SuperAdminSeeder extends Seeder
     public function run(): void
     {
         User::create([
-            'name'     => 'Anas Admin',
-            'email'    => 'admin@flashpay.com',
+            'name'     => 'l',
+            'email'    => 'l',
             'phone'    => '+351920653719',
-            'password' => Hash::make('A@a12345678'),
+            'password' => Hash::make('l'),
             'role'     => 'super_admin',
             'office_id'  => null,
             'country_id' => null,
