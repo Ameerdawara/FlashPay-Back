@@ -24,89 +24,41 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Storage;
 
-Route::get('/fix-status-constraint', function () {
-    try {
-        // حذف أي constraint قديم بأي اسم محتمل
-        DB::statement("ALTER TABLE transfers DROP CONSTRAINT IF EXISTS transfers_status_check");
-        DB::statement("ALTER TABLE transfers DROP CONSTRAINT IF EXISTS status_check");
- 
-        // التأكد أن العمود من نوع VARCHAR
-        DB::statement("ALTER TABLE transfers ALTER COLUMN status TYPE VARCHAR(255)");
- 
-        // إضافة constraint جديد يشمل جميع الحالات بما فيها 'archived'
-        DB::statement("ALTER TABLE transfers ADD CONSTRAINT transfers_status_check CHECK (status IN ('waiting', 'pending', 'approved', 'ready', 'completed', 'cancelled', 'rejected', 'archived'))");
- 
-        return response()->json([
-            'status'  => 'success',
-            'message' => 'تم إصلاح الـ constraint بنجاح ✅ — يمكنك حذف هذا الـ route الآن',
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'status'  => 'error',
-            'message' => $e->getMessage(),
-        ], 500);
-    }
-});
 
-Route::get('/clear-cache', function () {
-    Artisan::call('route:clear');
-    Artisan::call('config:clear');
-    Artisan::call('cache:clear');
-    return "تم مسح جميع أنواع التخزين المؤقت وتحديث المسارات!";
-});
-
-Route::get('/clear-cache', function () {
-    Artisan::call('route:clear');
-    Artisan::call('config:clear');
-    Artisan::call('cache:clear');
-    return "تم مسح جميع أنواع التخزين المؤقت وتحديث المسارات!";
-});
-
-Route::get('/run-cmd', function () {
-    try {
-        Artisan::call('migrate:fresh', [
-            '--force' => true,
-            '--seed'  => true,
-        ]);
-        return 'تمت إعادة بناء قاعدة البيانات وتشغيل الـ Seed بنجاح!';
-    } catch (\Exception $e) {
-        return 'حدث خطأ: ' . $e->getMessage();
-    }
-});
-
-// ✅ migrate آمن — يُضيف الأعمدة الجديدة فقط بدون مسح البيانات
-Route::get('/run-migrate', function () {
-    try {
-        Artisan::call('migrate', ['--force' => true]);
-        $output = Artisan::output();
-        return response()->json([
-            'status'  => 'success',
-            'message' => 'تم تشغيل الـ migrate بنجاح',
-            'output'  => $output,
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'status'  => 'error',
-            'message' => $e->getMessage(),
-        ], 500);
-    }
-});
-Route::get('/truncate-bank-transfer', function () {
-    \App\Models\BankTransfer::truncate();
-    return 'تم حذف بيانات جدول bank_transfer بنجاح';
-});
 /*
 |--------------------------------------------------------------------------
 | Public Routes
 |--------------------------------------------------------------------------
 */
+// ✅ /register الآن للعملاء فقط (مضمّن داخل AuthController::register)
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login',    [AuthController::class, 'login']);
-
+Route::view('/privacy-policy', 'privacy-policy');
 Route::get('/countries',  [CountryController::class, 'index']);
 Route::get('/cities',     [CityController::class, 'index']);
 Route::get('/currencies', [CurrencyController::class, 'index']);
+
+// ✅ صور الدردشة — عامة عمداً (وسم <img> لا يرسل Bearer token). الأسماء عشوائية 40 حرفاً.
+// المسار لا ينتهي بامتداد صورة (الملف يُمرَّر في ?p=) حتى لا يعترضه nginx كملف ثابت ويُرجع 404
+Route::get('/media', function (Request $request) {
+    $path = (string) $request->query('p', '');
+    $disk = Storage::disk('public');
+
+    abort_unless(
+        str_starts_with($path, 'chat_images/')
+        && !str_contains($path, '..')
+        && $disk->exists($path),
+        404
+    );
+
+    return $disk->response($path, null, ['Cache-Control' => 'public, max-age=86400']);
+});
+
+// ✅ استعادة كلمة المرور (رمز تحقق عبر البريد) — عامة لكن محمية بـ throttle
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
+Route::post('/reset-password',  [AuthController::class, 'resetPassword'])->middleware('throttle:10,1');
 
 /*
 |--------------------------------------------------------------------------
@@ -171,6 +123,9 @@ Route::middleware('auth:sanctum')->group(function () {
             return response()->json(['status' => 'success']);
         });
 
+        // ✅ إنشاء الموظفين/المندوبين — محمي فعليًا الآن (بدل /register العام)
+        Route::post('/staff', [AuthController::class, 'createStaff']);
+
         // الخزنة العليا
         Route::get('/super-safe',                       [\App\Http\Controllers\SuperSafeController::class, 'show']);
         Route::get('/super-safe/logs',                  [\App\Http\Controllers\SuperSafeController::class, 'logs']);
@@ -194,39 +149,55 @@ Route::middleware('auth:sanctum')->group(function () {
             return response()->json(['status' => 'success', 'data' => $user]);
         });
         Route::patch('/users/{id}/toggle-status', [AuthController::class, 'toggleStatus']);
-        // أسعار الصرف
+        // أسعار الصرف — بالدولار (كما كانت)
         Route::put('/currencies/update-price/{identifier}',      [CurrencyController::class, 'updatePrice']);
         Route::put('/currencies/update-main-price/{identifier}', [CurrencyController::class, 'updateMainPrice']);
         Route::post('/currencies/{id}/rates',                    [CurrencyController::class, 'updateRates']);
+
+        // أسعار الصرف — بالسوري (مستقلة تماماً عن الدولار)
+        Route::put('/currencies/update-price-syp/{identifier}',      [CurrencyController::class, 'updatePriceSyp']);
+        Route::put('/currencies/update-main-price-syp/{identifier}', [CurrencyController::class, 'updateMainPriceSyp']);
+        Route::post('/currencies/{id}/rates-syp',                    [CurrencyController::class, 'updateSypRates']);
 
         Route::apiResource('countries', CountryController::class)->except(['index']);
         Route::apiResource('cities',    CityController::class)->except(['index']);
 
         // إدارة الصناديق
-
         Route::patch('/agent/profit-ratio',       [TransferController::class, 'updateAgentProfitRatio']);
         Route::post('/trading-safe/update-cost',  [TradingSafeController::class, 'updateCostManual']);
     });
 
 
     Route::middleware('role:super_admin,admin')->group(function () {
-    Route::post('/offices/{officeId}/safe',  [OfficeSafeController::class, 'updateBalance']);
-    Route::post('/safes/adjust',             [SafeActionController::class, 'adjust']);
-    Route::post('/safes/transfer',           [SafeActionController::class, 'transfer']);
-    Route::post('/safes/transfer-to-office', [SafeActionController::class, 'transferToOfficeSafe']);
-    Route::post('/safes/profit/adjust',      [ProfitSafeController::class, 'adjustProfit']);
-    Route::post('/safes/transfer-profit',    [ProfitSafeController::class, 'transferProfitToOffice']);
-});
+        Route::post('/offices/{officeId}/safe',  [OfficeSafeController::class, 'updateBalance']);
+        Route::post('/safes/adjust',             [SafeActionController::class, 'adjust']);
+        Route::post('/safes/transfer',           [SafeActionController::class, 'transfer']);
+        Route::post('/safes/transfer-to-office', [SafeActionController::class, 'transferToOfficeSafe']);
+        Route::post('/safes/profit/adjust',      [ProfitSafeController::class, 'adjustProfit']);
+        Route::post('/safes/transfer-profit',    [ProfitSafeController::class, 'transferProfitToOffice']);
+    });
 
     // ─── 3. Admin فقط ────────────────────────────────────────────────────
     Route::middleware('role:admin')->group(function () {
         Route::post('/trading-safe/update-cost',  [TradingSafeController::class, 'updateCostManual']);
-
-
     });
 
     // ─── 4. مشتركة (Super Admin + Admin + Accountant + Cashier) ──────────
     Route::middleware('role:super_admin,admin,accountant,cashier')->group(function () {
+        // ✅ ملفات محمية (هوية / إيصالات / مرفقات الدردشة) — للموظفين فقط ومع Bearer token
+        // لا ينتهي المسار بامتداد صورة حتى لا يعترضه nginx
+        Route::get('/secure-file', function (Request $request) {
+            $path = (string) $request->query('p', '');
+            $disk = Storage::disk('public');
+
+            $allowed = ['id_cards/', 'receipts/', 'chat_images/'];
+            $ok = collect($allowed)->contains(fn ($d) => str_starts_with($path, $d));
+
+            abort_unless($ok && !str_contains($path, '..') && $disk->exists($path), 404);
+
+            return $disk->response($path, null, ['Cache-Control' => 'private, max-age=3600']);
+        });
+
         Route::get('/users', function () {
             $users = User::with(['city', 'country', 'office'])->get();
             return response()->json(['status' => 'success', 'data' => $users]);

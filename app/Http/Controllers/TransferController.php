@@ -64,14 +64,33 @@ class TransferController extends Controller
 
         $trackingCode = 'TRX-' . strtoupper(Str::random(8));
 
-        $currency    = Currency::with('rates')->findOrFail($validated['send_currency_id']);
-        $amountInUsd = $validated['amount'] * $this->getEffectiveRate($currency, $validated['amount']);
+        $currency        = Currency::with(['rates', 'sypRates'])->findOrFail($validated['send_currency_id']);
+        $receiveCurrency = Currency::findOrFail($validated['currency_id']);
+
+        // عملة الاستلام تحدد جهة التصريف: SYP → أسعار السوري، غير ذلك → أسعار الدولار
+        $rateType = $receiveCurrency->receiveRateType();
+
+        if (!$currency->supportsRateType($rateType)) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => "لا يوجد سعر صرف بالسوري للعملة {$currency->code}",
+            ], 422);
+        }
+
+        [$amountInUsd, $appliedRate, $amountInSyp] = $this->resolveRates(
+            $currency,
+            (float) $validated['amount'],
+            $rateType
+        );
 
         $transfer = Transfer::create([
             'tracking_code'          => $trackingCode,
             'sender_id'              => $request->input('sender_id', Auth::id()),
             'amount'                 => $validated['amount'],
             'amount_in_usd'          => $amountInUsd,
+            'rate_type'              => $rateType,
+            'applied_rate'           => $appliedRate,
+            'amount_in_syp'          => $amountInSyp,
             'currency_id'            => $validated['currency_id'],
             'send_currency_id'       => $validated['send_currency_id'],
             'destination_office_id'  => $validated['destination_office_id'] ?? null,
@@ -111,15 +130,34 @@ class TransferController extends Controller
 
         return DB::transaction(function () use ($validated) {
             $agent    = Auth::user();
-            $currency = Currency::with('rates')->findOrFail($validated['send_currency_id']);
-            $amount   = (float) $validated['amount'];
+            $currency        = Currency::with(['rates', 'sypRates'])->findOrFail($validated['send_currency_id']);
+            $receiveCurrency = Currency::findOrFail($validated['currency_id']);
+            $amount          = (float) $validated['amount'];
 
-            $effectiveRate = $this->getEffectiveRate($currency, $amount);
-            $amountInUsd   = $amount * $effectiveRate;
+            // عملة الاستلام تحدد جهة التصريف: SYP → أسعار السوري، غير ذلك → أسعار الدولار
+            $rateType = $receiveCurrency->receiveRateType();
+
+            if (!$currency->supportsRateType($rateType)) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => "لا يوجد سعر صرف بالسوري للعملة {$currency->code}",
+                ], 422);
+            }
+
+            [$amountInUsd, $appliedRate, $amountInSyp] = $this->resolveRates($currency, $amount, $rateType);
 
             // ── حساب الـ fee = فرق السعر (سعر البيع - سعر التكلفة) × المبلغ ──
-            $priceDiff = $effectiveRate - (float) ($currency->main_price ?? $effectiveRate);
-            $totalFee  = max(0, $amount * $priceDiff);
+            // بالدولار: يُحفظ في fee (كما كان).  بالسوري: يُحفظ في fee_syp ولا يختلط مع الدولار.
+            $totalFee    = 0;
+            $totalFeeSyp = null;
+
+            if ($rateType === Currency::RATE_SYP) {
+                $costSyp     = $currency->costPrice(Currency::RATE_SYP, $appliedRate);
+                $totalFeeSyp = max(0, $amount * ($appliedRate - $costSyp));
+            } else {
+                $priceDiff = $appliedRate - (float) ($currency->main_price ?? $appliedRate);
+                $totalFee  = max(0, $amount * $priceDiff);
+            }
 
             // ── صندوق المندوب (main_safe) ──────────────────────────────
             $agentSafe = MainSafe::where('owner_type', 'App\\Models\\User')
@@ -139,6 +177,9 @@ class TransferController extends Controller
                 'sender_id'             => $agent->id,
                 'amount'                => $amount,
                 'amount_in_usd'         => $amountInUsd,
+                'rate_type'             => $rateType,
+                'applied_rate'          => $appliedRate,
+                'amount_in_syp'         => $amountInSyp,
                 'currency_id'           => $validated['currency_id'],
                 'send_currency_id'      => $validated['send_currency_id'],
                 'destination_office_id' => $validated['destination_office_id'],
@@ -146,7 +187,8 @@ class TransferController extends Controller
                 'receiver_name'         => $validated['receiver_name'],
                 'receiver_phone'        => $validated['receiver_phone'],
                 'status'                => 'ready',
-                'fee'                   => $totalFee,       // ✅ الـ fee الحقيقي
+                'fee'                   => $totalFee,       // ✅ الـ fee الحقيقي (بالدولار)
+                'fee_syp'               => $totalFeeSyp,    // ✅ الـ fee بالسوري (إن كانت الحوالة بالسوري)
                 'agent_profit'          => $agentProfit,    // ✅ نسبة المندوب من fee
             ]);
 
@@ -187,10 +229,17 @@ class TransferController extends Controller
         $updateFields = array_filter($validated, fn($k) => $k !== 'notes', ARRAY_FILTER_USE_KEY);
 
         if (isset($updateFields['amount'])) {
-            $currency = Currency::with('rates')->find($transfer->send_currency_id);
+            $currency = Currency::with(['rates', 'sypRates'])->find($transfer->send_currency_id);
             if ($currency) {
-                $updateFields['amount_in_usd'] = $updateFields['amount']
-                    * $this->getEffectiveRate($currency, $updateFields['amount']);
+                [$amountInUsd, $appliedRate, $amountInSyp] = $this->resolveRates(
+                    $currency,
+                    (float) $updateFields['amount'],
+                    $transfer->rate_type ?? Currency::RATE_USD
+                );
+
+                $updateFields['amount_in_usd'] = $amountInUsd;
+                $updateFields['applied_rate']  = $appliedRate;
+                $updateFields['amount_in_syp'] = $amountInSyp;
             }
         }
 
@@ -257,25 +306,25 @@ class TransferController extends Controller
         // الإدمن يوافق على الحوالة الواردة ويجهزها للاستلام
        if (in_array($user->role, ['admin', 'super_admin'])) {
             if ($request->status === 'ready' && $transfer->status === 'waiting') {
-                // إرسال إشعار للزبون بأن الحوالة جاهزة
-                // $customer = \App\Models\User::find($transfer->sender_id);
-                // if ($customer && $customer->fcm_token) {
-                //     $fcmService = new \App\Services\FcmService();
-                //     $fcmService->sendNotification(
-                //         $customer->fcm_token,
-                //         "حوالتك جاهزة! ✅",
-                //         "طلبك للحوالة رقم ({$transfer->tracking_code}) أصبح جاهزاً للاستلام.",
-                //         [
-                //             'transfer_id' => (string)$transfer->id,
-                //             'type'        => 'transfer_ready',
-                //             'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
-                //         ]
-                //     );
-                // }
+               // إرسال إشعار للزبون بأن الحوالة جاهزة
+                $customer = \App\Models\User::find($transfer->sender_id);
+                if ($customer && $customer->fcm_token) {
+                    $fcmService = new \App\Services\FcmService();
+                    $fcmService->sendNotification(
+                        $customer->fcm_token,
+                        "حوالتك جاهزة! ✅",
+                        "طلبك للحوالة رقم ({$transfer->tracking_code}) أصبح جاهزاً للاستلام.",
+                        [
+                            'transfer_id' => (string)$transfer->id,
+                            'type'        => 'transfer_ready',
+                            'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
+                        ]
+                    );
+                }
 
              //   إرسال رسالة الواتساب
                 $phone = $transfer->receiver_phone;
-                $amount = $transfer->amount;
+                $amount = round((float) $transfer->receive_amount, 2);
                 $currency = $transfer->currency->code ?? '';
                 $whatsappMessage = "مرحباً المستلم الكريم، نعلمك أن حوالتك رقم ({$transfer->tracking_code}) بقيمة $amount $currency أصبحت جاهزة للاستلام الآن من مكتبنا.";
 
@@ -341,26 +390,29 @@ class TransferController extends Controller
                     $officeSafe->decrement('balance', $transfer->amount_in_usd);
                 }
                     // حساب الربح
-                    $currency = \App\Models\Currency::find($transfer->send_currency_id);
+                    $currency = \App\Models\Currency::with(['rates', 'sypRates'])->find($transfer->send_currency_id);
                     if ($currency) {
-                        $amount = $transfer->amount;
-                        $tier = \App\Models\CurrencyRate::where('currency_id', $currency->id)
-                            ->where('min_amount', '<=', $amount)
-                            ->where(function ($query) use ($amount) {
-                                $query->where('max_amount', '>=', $amount)
-                                      ->orWhereNull('max_amount');
-                            })->first();
+                        $amount   = (float) $transfer->amount;
+                        $rateType = $transfer->rate_type ?? \App\Models\Currency::RATE_USD;
 
-                        $appliedRate = $tier ? (float)$tier->rate : (float)$currency->price;
-                        $priceDiff = abs($appliedRate - (float)$currency->main_price);
-                        $profit = $amount * $priceDiff;
+                        if ($rateType === \App\Models\Currency::RATE_SYP) {
+                            // حوالة بالسوري: الربح بالسوري يُحفظ في fee_syp ولا يُضاف لصندوق الأرباح (بالدولار)
+                            $appliedRate = $currency->effectiveRate($amount, \App\Models\Currency::RATE_SYP);
+                            $costSyp     = $currency->costPrice(\App\Models\Currency::RATE_SYP, $appliedRate);
+                            $transfer->fee_syp = max(0, $amount * ($appliedRate - $costSyp));
+                        } else {
+                            // حوالة بالدولار: كما كانت تماماً (لكن الآن الشرائح من نوع usd فقط)
+                            $appliedRate = $currency->effectiveRate($amount, \App\Models\Currency::RATE_USD);
+                            $priceDiff   = abs($appliedRate - (float) $currency->main_price);
+                            $profit      = $amount * $priceDiff;
 
-                        $transfer->fee = $profit;
+                            $transfer->fee = $profit;
 
-                        $profitSafe = \App\Models\ProfitSafe::firstOrCreate(
-                            ['office_id' => $transfer->destination_office_id]
-                        );
-                        $profitSafe->increment('profit_main', $profit);
+                            $profitSafe = \App\Models\ProfitSafe::firstOrCreate(
+                                ['office_id' => $transfer->destination_office_id]
+                            );
+                            $profitSafe->increment('profit_main', $profit);
+                        }
                     }
 
 
@@ -380,28 +432,28 @@ class TransferController extends Controller
         $transfer->save();
 
         // إشعار اكتمال الحوالة
-        // if ($transfer->status === 'completed') {
-        //     $sender = \App\Models\User::find($transfer->sender_id);
-        //     if ($sender && $sender->fcm_token) {
-        //         $fcmService = new \App\Services\FcmService();
-        //         $fcmService->sendNotification(
-        //             $sender->fcm_token,
-        //             'اكتملت الحوالة! 🎉',
-        //             "تم تسليم حوالتك رقم ({$transfer->tracking_code}) بنجاح.",
-        //             [
-        //                 'transfer_id'     => (string) $transfer->id,
-        //                 'tracking_code'   => (string) $transfer->tracking_code,
-        //                 'current_user_id' => (string) $sender->id,
-        //                 'type'            => 'transfer_completed',
-        //             ]
-        //         );
-        //     }
-        // }
+        if ($transfer->status === 'completed') {
+            $sender = \App\Models\User::find($transfer->sender_id);
+            if ($sender && $sender->fcm_token) {
+                $fcmService = new \App\Services\FcmService();
+                $fcmService->sendNotification(
+                    $sender->fcm_token,
+                    'اكتملت الحوالة! 🎉',
+                    "تم تسليم حوالتك رقم ({$transfer->tracking_code}) بنجاح.",
+                    [
+                        'transfer_id'     => (string) $transfer->id,
+                        'tracking_code'   => (string) $transfer->tracking_code,
+                        'current_user_id' => (string) $sender->id,
+                        'type'            => 'transfer_completed',
+                    ]
+                );
+            }
+        }
 
         return response()->json([
             'status'  => 'success',
             'message' => 'تم تحديث الحوالة وتعديل الصناديق بنجاح',
-            'data'    => $transfer->load(['sender', 'currency','sender.country']),
+            'data'    => $transfer->load(['sender', 'currency', 'sendCurrency', 'sender.country']),
         ], 200);
     });
 }
@@ -489,22 +541,21 @@ class TransferController extends Controller
     // ─────────────────────────────────────────────────────────────────────
     private function getEffectiveRate(Currency $currency, float $amount): float
     {
-        $rates = $currency->rates ?? collect();
+        return $currency->effectiveRate($amount, Currency::RATE_USD);
+    }
 
-        if ($rates->isNotEmpty()) {
-            $sorted = $rates->sortBy('min_amount')->values();
+    // ─────────────────────────────────────────────────────────────────────
+    // يحسب [المبلغ بالدولار، السعر المطبّق، المبلغ بالسوري]
+    // - amount_in_usd يُحسب دائماً بسعر الدولار (حتى تبقى الصناديق كما هي)
+    // - السعر المطبّق والمبلغ بالسوري يُحسبان حسب rate_type
+    // ─────────────────────────────────────────────────────────────────────
+    private function resolveRates(Currency $currency, float $amount, string $rateType): array
+    {
+        $amountInUsd = $amount * $currency->effectiveRate($amount, Currency::RATE_USD);
+        $appliedRate = $currency->effectiveRate($amount, $rateType);
+        $amountInSyp = $rateType === Currency::RATE_SYP ? $amount * $appliedRate : null;
 
-            foreach ($sorted as $tier) {
-                $min = (float) $tier->min_amount;
-                $max = $tier->max_amount !== null ? (float) $tier->max_amount : INF;
-
-                if ($amount >= $min && $amount <= $max) {
-                    return (float) $tier->rate;
-                }
-            }
-        }
-
-        return (float) ($currency->price ?? 1);
+        return [$amountInUsd, $appliedRate, $amountInSyp];
     }
 
     // ─────────────────────────────────────────────────────────────────────

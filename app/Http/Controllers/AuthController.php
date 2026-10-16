@@ -8,50 +8,44 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
+    /**
+     * ✅ تسجيل عام — للعملاء فقط (customer).
+     * هذا هو المسار الذي يستخدمه تطبيق Flutter (الموقع العام للتسجيل).
+     * لا يُسمح بإنشاء أي صلاحية أعلى من هنا إطلاقًا.
+     */
     public function register(Request $request)
     {
         $validated = $request->validate([
             'name'     => 'required|string|max:255',
             'email'    => 'required|string|email|max:255|unique:users',
-            'phone'    => 'required|string|max:30|unique:users',   // ✅ max:30 لأرقام دولية
+            'phone'    => 'required|string|max:30|unique:users',
             'password' => 'required|string|min:8',
-            'role'     => ['required', Rule::in(['super_admin', 'admin', 'accountant', 'cashier', 'agent', 'customer'])],
 
-            // ✅ ثلاث صور منفصلة للـ customer (كل منها اختيارية منفردة لكن يُتحقق منها في الكود)
-            'selfie_with_id' => 'required_if:role,customer|image|mimes:jpeg,png,jpg|max:4096',
-            'id_card_front'  => 'required_if:role,customer|image|mimes:jpeg,png,jpg|max:4096',
-            'id_card_back'   => 'required_if:role,customer|image|mimes:jpeg,png,jpg|max:4096',
+            // ✅ مقيّد بـ customer فقط — لا يُؤخذ أي دور آخر من المدخلات
+            'role'     => ['required', Rule::in(['customer'])],
+
+            'selfie_with_id' => 'required|image|mimes:jpeg,png,jpg|max:4096',
+            'id_card_front'  => 'required|image|mimes:jpeg,png,jpg|max:4096',
+            'id_card_back'   => 'required|image|mimes:jpeg,png,jpg|max:4096',
 
             'country_id'   => ['nullable', 'exists:countries,id'],
             'city_id'      => ['nullable', 'exists:cities,id'],
 
             'country_name' => [
-                Rule::requiredIf(function () use ($request) {
-                    return in_array($request->role, ['agent', 'customer'])
-                        && empty($request->country_id);
-                }),
+                Rule::requiredIf(fn () => empty($request->country_id)),
                 'nullable', 'string',
             ],
             'city_name' => [
-                Rule::requiredIf(function () use ($request) {
-                    return in_array($request->role, ['agent', 'customer'])
-                        && empty($request->city_id);
-                }),
+                Rule::requiredIf(fn () => empty($request->city_id)),
                 'nullable', 'string',
             ],
 
-            'balance'            => 'required_if:role,agent|numeric|min:0',
-            'agent_profit_ratio' => 'nullable|numeric|min:0|max:100',
-            'office_id' => [
-                Rule::requiredIf(function () use ($request) {
-                    return in_array($request->role, ['admin', 'accountant', 'cashier']);
-                }),
-                'exists:offices,id',
-                'nullable'
-            ],
             'fcm_token' => 'nullable|string',
         ]);
 
@@ -59,28 +53,20 @@ class AuthController extends Controller
             $user = DB::transaction(function () use ($request, $validated) {
                 $data = $validated;
                 $data['password'] = Hash::make($request->password);
+                $data['role']     = 'customer'; // ✅ تأكيد إضافي صلب، بغض النظر عمّا أُرسل
 
-                // ✅ رفع الصور الثلاث منفصلة
                 unset($data['selfie_with_id'], $data['id_card_front'], $data['id_card_back']);
 
                 if ($request->hasFile('selfie_with_id')) {
-                    $data['selfie_with_id'] = $request->file('selfie_with_id')
-                        ->store('id_cards/selfies', 'public');
+                    $data['selfie_with_id'] = $request->file('selfie_with_id')->store('id_cards/selfies', 'public');
                 }
                 if ($request->hasFile('id_card_front')) {
-                    $data['id_card_front'] = $request->file('id_card_front')
-                        ->store('id_cards/fronts', 'public');
+                    $data['id_card_front'] = $request->file('id_card_front')->store('id_cards/fronts', 'public');
                 }
                 if ($request->hasFile('id_card_back')) {
-                    $data['id_card_back'] = $request->file('id_card_back')
-                        ->store('id_cards/backs', 'public');
+                    $data['id_card_back'] = $request->file('id_card_back')->store('id_cards/backs', 'public');
                 }
 
-                if ($request->role === 'agent') {
-                    $data['office_id'] = null;
-                }
-
-                // تحويل city_name → city_id
                 if (!empty($data['city_name'])) {
                     $city = \App\Models\City::where('name', $data['city_name'])->first();
                     if (!$city) {
@@ -90,7 +76,6 @@ class AuthController extends Controller
                     unset($data['city_name']);
                 }
 
-                // تحويل country_name → country_id
                 if (!empty($data['country_name'])) {
                     $country = \App\Models\Country::where('name', $data['country_name'])->first();
                     if (!$country) {
@@ -100,29 +85,7 @@ class AuthController extends Controller
                     unset($data['country_name']);
                 }
 
-                $agentProfitRatio = (float) ($data['agent_profit_ratio'] ?? 0);
-                unset($data['agent_profit_ratio']);
-
-                $user = User::create($data);
-
-                if ($user->role === 'agent') {
-                    if ($agentProfitRatio > 0) {
-                        try {
-                            \Illuminate\Support\Facades\DB::table('users')
-                                ->where('id', $user->id)
-                                ->update(['agent_profit_ratio' => $agentProfitRatio]);
-                            $user->agent_profit_ratio = $agentProfitRatio;
-                        } catch (\Exception $e) {
-                            // العمود غير موجود بعد — نتجاهل
-                        }
-                    }
-                    $user->mainSafe()->create([
-                        'balance'            => $request->balance ?? 0,
-                        'agent_profit_ratio' => $agentProfitRatio,
-                    ]);
-                }
-
-                return $user;
+                return User::create($data);
             });
 
             /** @var \App\Models\User $user */
@@ -139,6 +102,80 @@ class AuthController extends Controller
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Registration failed: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ✅ إنشاء موظفين/مندوبين — محمي بـ auth:sanctum + role:super_admin في الراوت.
+     * يطابق تمامًا منطق إنشاء غير-العملاء الذي كان سابقًا داخل register(),
+     * لذا لوحة السوبر أدمن (super.js) تعمل بنفس البيانات تمامًا، فقط عبر
+     * مسار محمي فعليًا هذه المرة بدل مسار عام كان يثق بالتوكن دون تحققه.
+     */
+    public function createStaff(Request $request)
+    {
+        $validated = $request->validate([
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|string|email|max:255|unique:users',
+            'phone'    => 'required|string|max:30|unique:users',
+            'password' => 'required|string|min:8',
+            'role'     => ['required', Rule::in(['super_admin', 'admin', 'accountant', 'cashier', 'agent'])],
+
+            'country_id' => ['nullable', 'exists:countries,id'],
+            'city_id'    => ['nullable', 'exists:cities,id'],
+
+            'balance'            => 'required_if:role,agent|numeric|min:0',
+            'agent_profit_ratio' => 'nullable|numeric|min:0|max:100',
+            'office_id' => [
+                Rule::requiredIf(fn () => in_array($request->role, ['admin', 'accountant', 'cashier'])),
+                'exists:offices,id',
+                'nullable'
+            ],
+        ]);
+
+        try {
+            $user = DB::transaction(function () use ($request, $validated) {
+                $data = $validated;
+                $data['password'] = Hash::make($request->password);
+
+                if ($request->role === 'agent') {
+                    $data['office_id'] = null;
+                }
+
+                $agentProfitRatio = (float) ($data['agent_profit_ratio'] ?? 0);
+                unset($data['agent_profit_ratio']);
+
+                $user = User::create($data);
+
+                if ($user->role === 'agent') {
+                    if ($agentProfitRatio > 0) {
+                        try {
+                            DB::table('users')->where('id', $user->id)
+                                ->update(['agent_profit_ratio' => $agentProfitRatio]);
+                            $user->agent_profit_ratio = $agentProfitRatio;
+                        } catch (\Exception $e) {
+                            // العمود غير موجود بعد — نتجاهل
+                        }
+                    }
+                    $user->mainSafe()->create([
+                        'balance'            => $request->balance ?? 0,
+                        'agent_profit_ratio' => $agentProfitRatio,
+                    ]);
+                }
+
+                return $user;
+            });
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'تم إضافة الموظف بنجاح',
+                'data'    => $user,
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'فشل إنشاء الموظف: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -186,7 +223,6 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        /** @var \App\Models\User $user */
         $token = $request->user()->currentAccessToken();
         if ($token) {
             $token->delete();
@@ -242,6 +278,86 @@ class AuthController extends Controller
         return response()->json([
             'status'  => 'success',
             'message' => 'تم تحديث الـ FCM Token بنجاح'
+        ]);
+    }
+
+    // =========================================================================
+    //  استعادة كلمة المرور عبر رمز تحقق يُرسل بالبريد
+    // =========================================================================
+
+    public function forgotPassword(Request $request)
+    {
+        $request->validate(['email' => 'required|email']);
+        $email = strtolower(trim($request->email));
+
+        $user = User::where('email', $email)->where('is_active', 1)->first();
+
+        if ($user) {
+            $code = (string) random_int(100000, 999999);
+
+            Cache::put("pwd_reset:$email", Hash::make($code), now()->addMinutes(10));
+            Cache::forget("pwd_reset_attempts:$email");
+
+            try {
+                Mail::raw(
+                    "رمز استعادة كلمة المرور في FlashPay: $code\nصالح لمدة 10 دقائق. إذا لم تطلب ذلك فتجاهل الرسالة.",
+                    function ($m) use ($user) {
+                        $m->to($user->email)->subject('استعادة كلمة المرور - FlashPay');
+                    }
+                );
+            } catch (\Throwable $e) {
+                Log::error('Reset mail failed: ' . $e->getMessage());
+            }
+        }
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'إذا كان البريد مسجلًا فقد تم إرسال رمز التحقق',
+        ]);
+    }
+
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'email'    => 'required|email',
+            'code'     => 'required|digits:6',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+        $email = strtolower(trim($request->email));
+
+        $attemptsKey = "pwd_reset_attempts:$email";
+        if ((int) Cache::get($attemptsKey, 0) >= 5) {
+            Cache::forget("pwd_reset:$email");
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'تجاوزت عدد المحاولات المسموحة، يرجى طلب رمز جديد'
+            ], 429);
+        }
+
+        $hash = Cache::get("pwd_reset:$email");
+        if (!$hash || !Hash::check($request->code, $hash)) {
+            Cache::put($attemptsKey, (int) Cache::get($attemptsKey, 0) + 1, now()->addMinutes(10));
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'الرمز غير صحيح أو منتهي الصلاحية'
+            ], 422);
+        }
+
+        $user = User::where('email', $email)->first();
+        if (!$user) {
+            return response()->json(['status' => 'error', 'message' => 'المستخدم غير موجود'], 404);
+        }
+
+        $user->password = Hash::make($request->password);
+        $user->save();
+        $user->tokens()->delete();
+
+        Cache::forget("pwd_reset:$email");
+        Cache::forget($attemptsKey);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'تم تغيير كلمة المرور بنجاح'
         ]);
     }
 }

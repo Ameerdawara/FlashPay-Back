@@ -17,12 +17,33 @@ class Message extends Model
         'message',
         'is_read',
     ];
+
+    protected $casts = [
+        'is_read' => 'boolean',
+    ];
+
+    /**
+     * رابط الصورة يمر عبر Laravel نفسه (route: /api/media?p=chat_images/xxx.jpg)
+     * فلا يعتمد على nginx ولا على الرابط الرمزي public/storage.
+     * المخزَّن في قاعدة البيانات يبقى مساراً نسبياً (chat_images/xxx.jpg).
+     */
     public function getImageAttribute($value)
     {
-        if ($value) {
-            return asset('storage/' . $value); 
+        if (!$value) {
+            return null;
         }
-        return null;
+
+        // رابط كامل مسبقاً
+        if (preg_match('#^https?://#i', $value)) {
+            return preg_replace('#^http://#i', 'https://', $value);
+        }
+
+        $path = ltrim($value, '/');
+        if (str_starts_with($path, 'storage/')) {
+            $path = substr($path, strlen('storage/'));
+        }
+
+        return preg_replace('#^http://#i', 'https://', url('/api/media') . '?p=' . rawurlencode($path));
     }
 
     // علاقة الرسالة بالحوالة

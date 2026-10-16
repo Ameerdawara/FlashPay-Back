@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ChatController extends Controller
 {
@@ -18,12 +19,14 @@ class ChatController extends Controller
         $transfer = Transfer::findOrFail($transferId);
 
         // الصلاحية: المرسل (الزبون) أو أي موظف في المكتب
-        $isStaff = in_array($user->role, ['admin']);
+        // ✅ كانت تقبل 'admin' فقط، وأصبحت متسقة مع sendMessage
+        $isStaff = in_array($user->role, ['admin', 'super_admin', 'cashier', 'accountant']);
 
         if ($transfer->sender_id !== $user->id && !$isStaff) {
             return response()->json(['message' => 'غير مصرح لك بمشاهدة هذه المحادثة'], 403);
         }
 
+        // ✅ نحمّل role أيضاً ليعمل isStaff في تطبيق Flutter
         $messages = Message::where('transfer_id', $transferId)
             ->with('sender:id,name,role')
             ->orderBy('created_at', 'asc')
@@ -31,11 +34,9 @@ class ChatController extends Controller
 
         // تحديد الرسائل كمقروءة حسب الطرف الذي يفتح المحادثة
         if (!$isStaff) {
-            // الزبون يقرأ رسائل الموظفين
             Message::where('transfer_id', $transferId)->where('receiver_id', $user->id)
                 ->where('is_read', false)->update(['is_read' => true]);
         } else {
-            // الموظفون يقرؤون رسائل الزبون
             Message::where('transfer_id', $transferId)->where('sender_id', $transfer->sender_id)
                 ->where('is_read', false)->update(['is_read' => true]);
         }
@@ -61,13 +62,15 @@ class ChatController extends Controller
             return response()->json(['message' => 'غير مصرح لك بإرسال رسالة'], 403);
         }
 
-        // جلب معرف مسؤول ليكون بمثابة "النظام" لاستقبال رسائل الزبون
+        // مسؤول يمثّل "النظام" لاستقبال رسائل الزبون
         $adminUser = User::whereIn('role', ['admin', 'super_admin'])->first();
         $systemId = $adminUser ? $adminUser->id : 1;
 
-        // من هو المستقبل؟
         $receiverId = ($user->id === $transfer->sender_id) ? $systemId : $transfer->sender_id;
 
+        $newMessages = [];
+
+        // ───────────── 1) الحفظ في قاعدة البيانات فقط ─────────────
         try {
             DB::beginTransaction();
 
@@ -84,7 +87,7 @@ class ChatController extends Controller
                 'image'       => $imagePath,
             ]);
 
-            $newMessages = [$message->load('sender:id,name')];
+            $newMessages[] = $message->load('sender:id,name,role');
 
             // الرد التلقائي من المكتب
             $isFirstMessage = Message::where('transfer_id', $transferId)->count() === 1;
@@ -92,46 +95,53 @@ class ChatController extends Controller
             if ($isFirstMessage && $user->id === $transfer->sender_id) {
                 $autoMessage = Message::create([
                     'transfer_id' => $transferId,
-                    'sender_id'   => $systemId, // النظام يرد باسم الإدمن
+                    'sender_id'   => $systemId,
                     'receiver_id' => $transfer->sender_id,
                     'message'     => "مرحباً بك! طلبك للحوالة رقم ({$transfer->tracking_code}) وصل لمكتبنا. سنقوم بتجهيز المبلغ، ويمكنك التواصل معنا هنا لأي استفسار.",
                 ]);
-                $newMessages[] = $autoMessage->load('sender:id,name');
+                $newMessages[] = $autoMessage->load('sender:id,name,role');
             }
 
             DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Chat save failed: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'فشل الإرسال: ' . $e->getMessage()], 500);
+        }
 
-            foreach ($newMessages as $msg) {
-                broadcast(new MessageSent($msg));
+        // ───────────── 2) البث اللحظي (فشله لا يجب أن يفشل الطلب) ─────────────
+        // السبب السابق للخطأ 500: Pusher رجّع 404 بعد حفظ الرسالة، فكان الـ catch يعيد 500
+        foreach ($newMessages as $msg) {
+            try {
+                broadcast(new MessageSent($msg))->toOthers();
+            } catch (\Throwable $e) {
+                Log::warning('Chat broadcast failed: ' . $e->getMessage());
             }
-            // ✅ إضافة: إرسال إشعار للزبون إذا كان المرسل من طاقم المكتب
-            if ($isStaff) {
+        }
+
+        // ───────────── 3) إشعار FCM للزبون ─────────────
+        if ($isStaff) {
+            try {
                 $customer = User::find($transfer->sender_id);
                 if ($customer && $customer->fcm_token) {
-                    $notificationBody = $request->message ? $request->message : 'تم إرسال صورة';
-
-                    $fcmService = new \App\Services\FcmService();
-
-                    // ✅ نمرر البيانات هنا كمصفوفة في المعامل الرابع
-                    $fcmService->sendNotification(
+                    (new \App\Services\FcmService())->sendNotification(
                         $customer->fcm_token,
                         "رسالة جديدة بخصوص الحوالة ({$transfer->tracking_code})",
-                        $notificationBody,
+                        $request->message ?: 'تم إرسال صورة',
                         [
-                            'transfer_id' => (string)$transfer->id, // تحويل الرقم لنص ضروري جداً لـ Firebase
-                            'tracking_code'   => $transfer->tracking_code, // ✅ تمت الإضافة
-                            'current_user_id' => (string)$customer->id,    // ✅ تمت الإضافة
-                            'type'        => 'chat',
-                            'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
+                            'transfer_id'     => (string) $transfer->id,
+                            'tracking_code'   => (string) $transfer->tracking_code,
+                            'current_user_id' => (string) $customer->id,
+                            'type'            => 'chat',
+                            'click_action'    => 'FLUTTER_NOTIFICATION_CLICK',
                         ]
                     );
                 }
+            } catch (\Throwable $e) {
+                Log::warning('Chat FCM failed: ' . $e->getMessage());
             }
-
-            return response()->json(['status' => 'success', 'message' => 'تم الإرسال', 'data' => $newMessages], 201);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['status' => 'error', 'message' => 'فشل الإرسال: ' . $e->getMessage()], 500);
         }
+
+        return response()->json(['status' => 'success', 'message' => 'تم الإرسال', 'data' => $newMessages], 201);
     }
 }
